@@ -87,9 +87,9 @@ public sealed class Stack : Widget
         }
     }
 
-    private Constraint[] _constraints = Array.Empty<Constraint>();
-    private int[] _sizes = Array.Empty<int>();
-    private Rect[] _childRects = Array.Empty<Rect>();
+    private Constraint[] _constraints = [];
+    private int[] _sizes = [];
+    private Rect[] _childRects = [];
 
     /// <summary>Natural size: sum of child extents along the axis, max across it. Used by
     /// containers like <see cref="ScrollView"/> to learn full content height.</summary>
@@ -126,9 +126,9 @@ public sealed class Stack : Widget
 
     public override bool OnEvent(InputEvent e)
     {
-        // Mouse events route by POSITION. Move (hover) is BROADCAST to every child so a widget
-        // the cursor just LEFT can clear its hover state — positional-only delivery would never
-        // tell it the cursor left. Click/wheel/drag go only to the child under the cursor.
+        // Mouse events route by position, except hover (Move) is sent to every child: a widget
+        // the cursor just left needs to hear about it to clear its hover state, and positional
+        // delivery alone would never tell it. Click/wheel/drag go only to the child under the cursor.
         if (e is MouseEvent m)
         {
             if (m.Kind == MouseEventKind.Move)
@@ -255,10 +255,12 @@ public sealed class Stack : Widget
             else
             {
                 foreach (var child in Children)
+                {
                     if (child.Widget.HasFocus)
                     {
                         child.Widget.HasFocus = false;
                     }
+                }
             }
         }
     }

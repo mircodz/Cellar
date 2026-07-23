@@ -5,9 +5,9 @@ using Tessera.Primitives;
 namespace Tessera.Rendering;
 
 /// <summary>
-/// Holds a front buffer (on screen) and a back buffer (next frame). <see cref="ComputeDiff"/>
-/// emits the minimal ANSI to turn front into back — moving the cursor only on run breaks,
-/// re-emitting style only on change, skipping unchanged cells — then promotes back to front.
+/// Holds a front buffer (on screen) and a back buffer (next frame). <see cref="BuildDiff"/>
+/// emits the minimal ANSI to turn front into back: it moves the cursor only on run breaks,
+/// re-emits style only on change, and skips unchanged cells, then promotes back to front.
 /// </summary>
 public sealed class Screen
 {
@@ -58,7 +58,14 @@ public sealed class Screen
     }
 
     /// <summary>Returns the ANSI patching front→back, then promotes back to front. Empty if unchanged.</summary>
-    public string ComputeDiff()
+    public string ComputeDiff() => BuildDiff().ToString();
+
+    /// <summary>
+    /// Builds the front→back patch into a reused <see cref="StringBuilder"/> and promotes
+    /// back to front. Returns the builder (empty when nothing changed) so callers can write
+    /// it without allocating a string. Valid until the next call.
+    /// </summary>
+    public StringBuilder BuildDiff()
     {
         var sb = _diffBuffer;
         sb.Clear();
@@ -68,6 +75,7 @@ public sealed class Screen
         int cursorX = -1, cursorY = -1;
         bool styleKnown = false;
         Style lastStyle = Style.Default;
+        bool anyChanged = false;
 
         for (int y = 0; y < h; y++)
         {
@@ -89,6 +97,8 @@ public sealed class Screen
                     x++;
                     continue;
                 }
+
+                anyChanged = true;
 
                 // Move the cursor if we're not already positioned here.
                 if (!cursorKnown || cursorX != x || cursorY != y)
@@ -127,8 +137,16 @@ public sealed class Screen
             sb.Append("\x1b[0m"); // leave the terminal in a clean state
         }
 
-        PromoteBackToFront();
-        return sb.ToString();
+        // Nothing changed and the front is already a valid mirror of the back: the copy would
+        // be a no-op memcpy of the whole grid, so skip it. The one case we must still promote
+        // is a forced full repaint that emitted nothing (e.g. an all-blank frame after
+        // Invalidate) — there _frontValid is false and anyChanged stays false, so promote.
+        if (anyChanged || !_frontValid)
+        {
+            PromoteBackToFront();
+        }
+
+        return sb;
     }
 
     private Cell FrontCell(int x, int y, int w)

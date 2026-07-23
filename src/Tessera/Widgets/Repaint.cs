@@ -3,16 +3,14 @@ using System;
 namespace Tessera.Widgets;
 
 /// <summary>
-/// An ambient seam for a widget to request a coalesced repaint from within itself, without
-/// holding an <see cref="App"/> reference. Mirrors the <see cref="Theming.Theme.Current"/>
-/// ambient: a running <see cref="App"/> wires its <see cref="App.Invalidate"/> in for the
-/// duration of the loop and clears it on exit.
+/// Lets a widget request a repaint from inside itself without holding an <see cref="App"/>
+/// reference. Works like <see cref="Theming.Theme.Current"/>: a running <see cref="App"/> wires
+/// its <see cref="App.Invalidate"/> in for the duration of the loop and clears it on exit.
 /// </summary>
 /// <remarks>
-/// Assumes one live <see cref="App"/> per process (true for a TUI). <see cref="Request"/> is a
-/// null-check plus a delegate call — allocation-free and safe to call from any thread; the wired
-/// <see cref="App.Invalidate"/> already marshals through the app's wake/coalesce path, so a burst
-/// of requests collapses into a single frame.
+/// Assumes one live <see cref="App"/> per process (true for a TUI). <see cref="Request"/> is just
+/// a null-check and a delegate call, safe from any thread. The wired <see cref="App.Invalidate"/>
+/// goes through the app's wake/coalesce path, so a burst of requests collapses into one frame.
 /// </remarks>
 public static class Repaint
 {

@@ -116,8 +116,13 @@ public sealed class Surface
 
     /// <summary>Draws a string at (x,y), advancing by each grapheme's width. Returns the ending x.</summary>
     public int DrawText(int x, int y, string text, Style style)
+        => DrawText(x, y, text.AsSpan(), style);
+
+    /// <summary>Span overload of <see cref="DrawText(int,int,string,Style)"/>. Lets callers
+    /// draw a slice of a larger string without allocating a substring.</summary>
+    public int DrawText(int x, int y, ReadOnlySpan<char> text, Style style)
     {
-        if (string.IsNullOrEmpty(text))
+        if (text.IsEmpty)
         {
             return x;
         }
@@ -177,7 +182,7 @@ public sealed class Surface
             Cell cell;
             if (hasCombining)
             {
-                cell = Cell.FromGrapheme(text.Substring(i, clusterEnd - i), style);
+                cell = Cell.FromGrapheme(new string(text.Slice(i, clusterEnd - i)), style);
                 i = clusterEnd;
             }
             else

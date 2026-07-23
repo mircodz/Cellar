@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using Tessera.Primitives;
 
 namespace Tessera.Terminal;
@@ -27,6 +28,11 @@ public interface ITerminal : IDisposable
 
     /// <summary>Writes a pre-rendered ANSI string to the terminal.</summary>
     void Write(string ansi);
+
+    /// <summary>Writes an ANSI frame from a <see cref="StringBuilder"/>. Implementations can
+    /// encode into a reused buffer so a steady frame doesn't allocate a string or a byte[].
+    /// The default just falls back to <see cref="Write(string)"/>.</summary>
+    void Write(StringBuilder ansi) => Write(ansi.ToString());
 
     /// <summary>Blocks until input arrives (or the timeout elapses), copies into
     /// <paramref name="buffer"/>, and returns the count. 0 on timeout.</summary>

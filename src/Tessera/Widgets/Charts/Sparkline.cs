@@ -24,6 +24,11 @@ public sealed class Sparkline : Widget
     /// <summary>Line color. Null uses the theme accent.</summary>
     public Color? Color { get; set; }
 
+    /// <summary>Cell background behind the bars. Null keeps it terminal-transparent. Set this
+    /// when drawing over a solid-colored panel, otherwise the unfilled part of a partial block
+    /// glyph shows the terminal background instead of the panel's, hiding the bar's height.</summary>
+    public Color? Background { get; set; }
+
     /// <summary>When true, the bottom of the chart is anchored at 0 (bars show absolute
     /// magnitude); when false (default), it auto-fits the visible min so small variations fill
     /// the height. Anchor at zero for metrics like frame time where absolute size matters.</summary>
@@ -72,7 +77,7 @@ public sealed class Sparkline : Widget
             return;
         }
 
-        var style = new Style(Color ?? Theme.Current.Accent, Primitives.Color.Default);
+        var style = new Style(Color ?? Theme.Current.Accent, Background ?? Primitives.Color.Default);
         int width = area.Width;
         int height = area.Height;
 

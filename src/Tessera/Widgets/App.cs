@@ -12,7 +12,7 @@ namespace Tessera.Widgets;
 /// <summary>
 /// The application host and event loop: funnels input, resize, and posted messages through
 /// one channel, dispatches them, re-renders the root into the back buffer, and flushes the
-/// diff. The seam a live data stream plugs into via <see cref="Post"/>.
+/// diff. Use <see cref="Post"/> to feed a live data stream into the loop.
 /// </summary>
 public sealed class App : IDisposable
 {
@@ -195,8 +195,8 @@ public sealed class App : IDisposable
         _terminal.EnterRawMode();
         _running = true;
 
-        // Wire the ambient repaint seam so widgets (spinners, skeletons, async loaders) can
-        // request a coalesced repaint from within themselves for the duration of the loop.
+        // Wire up Repaint for the duration of the loop, so widgets (spinners, skeletons, async
+        // loaders) can request a coalesced repaint from within themselves.
         Repaint.Callback = Invalidate;
 
         // Enable any-motion tracking so widgets receive bare hover (Move) events. This is a
@@ -215,10 +215,9 @@ public sealed class App : IDisposable
             Render(); // initial paint
             long lastRenderTicks = Environment.TickCount64;
 
-            // Event-driven loop: block until a message arrives (input, resize, or a Post),
-            // costing nothing while idle — no periodic tick, no polling. Then drain everything
-            // pending and render at most once. Renders are coalesced to FrameInterval so a
-            // burst of messages can't drive the display faster than the frame cap.
+            // Block until a message arrives (input, resize, or a Post), so an idle app does no
+            // work. Then drain everything pending and render at most once. Renders are coalesced
+            // to FrameInterval so a burst of messages can't drive the display past the frame cap.
             while (_running && !cancellationToken.IsCancellationRequested)
             {
                 // Park in the kernel/scheduler until there's something to do.
@@ -420,7 +419,7 @@ public sealed class App : IDisposable
             back.ResetClip();
         }
 
-        string diff = _screen.ComputeDiff();
+        var diff = _screen.BuildDiff();
         if (diff.Length > 0)
         {
             _terminal.Write(diff);

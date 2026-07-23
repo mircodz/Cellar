@@ -341,7 +341,11 @@ internal static class Demos
         var bar = new ProportionBar { ShowInlineLabels = true };
         var legend = new Legend { Horizontal = true };
         double total = 0;
-        foreach (var (_, v) in parts) total += v;
+        foreach (var (_, v) in parts)
+        {
+            total += v;
+        }
+
         for (int i = 0; i < parts.Length; i++)
         {
             bar.Segments.Add(new Segment(parts[i].Item1, parts[i].Item2, palette[i]));
@@ -386,9 +390,17 @@ internal static class Demos
             new Spinner(SpinnerFrames.Bounce, "Bounce"),
             new Spinner(SpinnerFrames.Circle, "Circle"),
         };
-        ctx.Tick += _ => { foreach (var s in spinners) s.Advance(); };
+        ctx.Tick += _ => { foreach (var s in spinners)
+            {
+                s.Advance();
+            }
+        };
         var row = new Stack(Direction.Horizontal);
-        foreach (var s in spinners) row.Add(new Padding(s, new Thickness(1, 0)), Constraint.Fill());
+        foreach (var s in spinners)
+        {
+            row.Add(new Padding(s, new Thickness(1, 0)), Constraint.Fill());
+        }
+
         return new Stack(Direction.Vertical)
             .Add(new Label(StyledText.Empty()), Constraint.Fill())
             .Add(new Padding(row, new Thickness(1, 0)), Constraint.Length(1))

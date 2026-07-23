@@ -61,15 +61,10 @@ public sealed class Label : Widget
         }
     }
 
-    public override bool OnEvent(InputEvent e)
+    public override bool OnEvent(InputEvent e) => e switch
     {
-        switch (e)
-        {
-            case MouseEvent { Kind: MouseEventKind.Move } m:
-                return UpdateHover(m.X, m.Y);
-            case MouseEvent { Kind: MouseEventKind.Down } m:
-                return DispatchLinkClick(m.X, m.Y);
-        }
-        return false;
-    }
+        MouseEvent { Kind: MouseEventKind.Move } m => UpdateHover(m.X, m.Y),
+        MouseEvent { Kind: MouseEventKind.Down } m => DispatchLinkClick(m.X, m.Y),
+        _ => false
+    };
 }

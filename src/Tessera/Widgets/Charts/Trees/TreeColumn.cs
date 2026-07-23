@@ -8,9 +8,9 @@ public enum TreeColumnAlign { Left, Right }
 
 /// <summary>
 /// A fixed-width metric column rendered on the right side of a <see cref="TreeView{T}"/>,
-/// aligned across all rows regardless of tree depth. This is what turns the tree into a
-/// "tree-table": the name column on the left carries the guides and flexes to fill,
-/// while these columns stay in rigid vertical alignment (e.g. a time and a percentage).
+/// aligned across all rows regardless of tree depth. The name column on the left carries the
+/// guides and flexes to fill; these columns stay in rigid vertical alignment (e.g. a time and
+/// a percentage), giving the tree a table on the right.
 /// </summary>
 public sealed class TreeColumn<T>
 {

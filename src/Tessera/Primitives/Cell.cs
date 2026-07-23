@@ -6,9 +6,8 @@ namespace Tessera.Primitives;
 /// <summary>
 /// One terminal cell: a grapheme plus its style. <see cref="Width"/> is 0/1/2; the trailing
 /// half of a wide glyph is a width-0 <see cref="Continuation"/> so the grid stays aligned.
-/// The grapheme is stored inline (1-2 UTF-16 chars) to keep drawing allocation-free; only
-/// rare multi-scalar clusters fall back to a string. Use <see cref="AppendTo"/> over
-/// <see cref="Grapheme"/> on the hot path to avoid materializing a string.
+/// The grapheme is stored inline (1-2 UTF-16 chars) so drawing doesn't allocate; longer
+/// clusters fall back to a string. <see cref="AppendTo"/> avoids materializing that string.
 /// </summary>
 public readonly struct Cell : IEquatable<Cell>
 {
@@ -110,7 +109,7 @@ public readonly struct Cell : IEquatable<Cell>
         }
     }
 
-    /// <summary>Appends this cell's glyph to a builder without allocating (the hot path).</summary>
+    /// <summary>Appends this cell's glyph to a builder without allocating.</summary>
     public void AppendTo(StringBuilder sb)
     {
         if (_text is not null) { sb.Append(_text); return; }

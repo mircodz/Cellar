@@ -24,11 +24,10 @@ public readonly struct FuzzyMatch
 }
 
 /// <summary>
-/// A lightweight fzf-style fuzzy matcher. A query matches a candidate if the query's
-/// characters appear in order (as a subsequence, case-insensitively). The score rewards
-/// good matches — consecutive runs, matches at word boundaries / camelCase humps / after
-/// separators, and matches near the start — and penalizes leading gaps, so results can be
-/// ranked. Pure and allocation-conscious; suitable for filtering on every keystroke.
+/// A lightweight fzf-style fuzzy matcher. A query matches a candidate if the query's characters
+/// appear in order (as a subsequence, case-insensitively). The score rewards consecutive runs,
+/// matches at word boundaries / camelCase humps / after separators, and matches near the start,
+/// and penalizes leading gaps, so results can be ranked. Cheap enough to filter on every keystroke.
 /// </summary>
 public static class FuzzyMatcher
 {

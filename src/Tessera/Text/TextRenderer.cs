@@ -162,7 +162,7 @@ public static class TextRenderer
     private static void DrawFilled(Surface surface, int x, int y, int width, IReadOnlyList<Span> spans, int textWidth)
     {
         // Distribute extra space across inter-word gaps for justified (fill) text. Indexed
-        // loops (not foreach) to avoid boxing the IReadOnlyList enumerator on the hot path.
+        // loops rather than foreach, so we don't box the IReadOnlyList enumerator.
         int gaps = 0;
         for (int i = 0; i < spans.Count; i++)
         {
@@ -222,25 +222,38 @@ public static class TextRenderer
         {
             var span = spans[si];
             lastStyle = span.Style;
-            // Walk the span's runes directly rather than allocating a grapheme enumerator +
-            // per-cluster strings. Combining marks are width 0, so per-rune width == cluster
-            // width; DrawText handles the actual cluster/wide-glyph rendering.
             var text = span.Text.AsSpan();
             int i = 0;
             while (i < text.Length)
             {
+                // Take one grapheme cluster: a base scalar plus any trailing zero-width marks,
+                // so a combining sequence ("e"+U+0301) is drawn as one unit, not split.
+                int start = i;
                 char c = text[i];
                 int len = char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? 2 : 1;
                 var rune = len == 2 ? new System.Text.Rune(c, text[i + 1]) : new System.Text.Rune(c);
                 int gw = Unicode.RuneWidth(rune);
+                i += len;
+
+                while (i < text.Length)
+                {
+                    char nc = text[i];
+                    int nlen = char.IsHighSurrogate(nc) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? 2 : 1;
+                    var next = nlen == 2 ? new System.Text.Rune(nc, text[i + 1]) : new System.Text.Rune(nc);
+                    if (Unicode.RuneWidth(next) != 0)
+                    {
+                        break;
+                    }
+                    i += nlen; // absorb the mark into this cluster
+                }
+
                 if (gw > 0 && used + gw > budget)
                 {
                     surface.DrawText(cx, y, "…", span.Style);
                     return;
                 }
-                cx = surface.DrawText(cx, y, span.Text.Substring(i, len), span.Style);
+                cx = surface.DrawText(cx, y, text.Slice(start, i - start), span.Style);
                 used += gw;
-                i += len;
             }
         }
         surface.DrawText(cx, y, "…", lastStyle);

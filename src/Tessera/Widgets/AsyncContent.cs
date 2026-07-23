@@ -10,30 +10,23 @@ using Tessera.Theming;
 namespace Tessera.Widgets;
 
 /// <summary>
-/// Loads an expensive widget off the UI thread without the consumer hand-rolling threading. On the
-/// first render it paints a placeholder (a <see cref="Spinner"/> by default) and never blocks; a
-/// user-supplied factory runs on a background <see cref="Task"/> exactly once (started lazily on
-/// first render, so a lazy tab never shown does no work); when it completes the produced widget is
-/// swapped in and a repaint is requested. On failure it shows an error widget.
+/// Loads an expensive widget off the UI thread so the caller doesn't have to wire up threading.
+/// The first render paints a placeholder (a <see cref="Spinner"/> by default) and never blocks;
+/// a factory runs on a background <see cref="Task"/> exactly once, started lazily on first render
+/// so a tab that's never shown does no work. When it finishes, the produced widget is swapped in
+/// and a repaint is requested. On failure it shows an error widget.
 /// </summary>
 /// <remarks>
-/// Performance posture (Tessera keeps the render path allocation-free):
-/// <list type="bullet">
-/// <item><b>No per-frame allocation</b> in Render/Measure/OnEvent — they read one cached reference
-/// (<c>_loaded ?? _placeholder</c>) and delegate; no closures/LINQ per frame.</item>
-/// <item><b>No polling</b> — completion pushes a single <see cref="Repaint.Request"/> through the
-/// app's existing coalesced wake path; nothing spins waiting.</item>
-/// <item><b>Single-handoff thread-safety</b> — the worker writes <c>_loaded</c> once (volatile) and
-/// requests one repaint; the render thread reads that one reference. No lock is held across Render,
-/// and the worker touches no other shared widget state.</item>
-/// <item><b>Lazy + once</b> via <see cref="Interlocked"/>, even under re-entrant renders.</item>
-/// <item><b>Cheap, correct cancellation</b> — unmount/dispose cancels the token; a late completer
-/// that finds itself cancelled neither publishes nor repaints.</item>
-/// </list>
+/// Render/Measure/OnEvent just read one cached reference (<c>_loaded ?? _placeholder</c>) and
+/// delegate, so steady state allocates nothing per frame. Completion pushes a single
+/// <see cref="Repaint.Request"/> instead of polling. The worker writes <c>_loaded</c> once
+/// (volatile) and the render thread reads it, so no lock spans a render. <see cref="Interlocked"/>
+/// keeps the launch lazy and exactly-once. Unmount/dispose cancels the token; a completer that
+/// finds itself cancelled neither publishes nor repaints.
 /// </remarks>
 public sealed class AsyncContent : Widget, IDisposable
 {
-    // The single swap point: the render thread reads this; the worker writes it exactly once.
+    // The render thread reads this; the worker writes it exactly once.
     private volatile Widget? _loaded;
 
     private readonly Widget _placeholder;

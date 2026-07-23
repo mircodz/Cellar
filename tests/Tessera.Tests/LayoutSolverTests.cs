@@ -117,4 +117,34 @@ public class LayoutSolverTests
         Assert.Equal(3, sizes[1]);
         Assert.Equal(3, sizes[2]);
     }
+
+    [Fact]
+    public void Percentages_ThatRoundShort_StillTileExactly()
+    {
+        // 33% × 3 rounds to 33+33+33 = 99; the leftover cell must be handed back so the
+        // split covers the full width (bug: last column was never painted).
+        var sizes = LayoutSolver.Solve(100, [Constraint.Percentage(33), Constraint.Percentage(33), Constraint.Percentage(33)]);
+        Assert.Equal(100, Sum(sizes));
+    }
+
+    [Fact]
+    public void Overflow_ShrinkRespectsMin()
+    {
+        // Length(80) + Min(30) into 100 overshoots by 10. The Min slot must keep its floor;
+        // the fixed-length slot yields instead (bug: Min was silently shrunk to 20).
+        var sizes = LayoutSolver.Solve(100, [Constraint.Length(80), Constraint.Min(30)]);
+        Assert.Equal(100, Sum(sizes));
+        Assert.True(sizes[1] >= 30, $"Min(30) slot shrank to {sizes[1]}");
+        Assert.Equal(70, sizes[0]);
+    }
+
+    [Fact]
+    public void Overflow_MinsBeyondTotal_StillFit()
+    {
+        // Two Min slots that together exceed the total: no floor can be honored, but the
+        // result must still sum to total without going negative.
+        var sizes = LayoutSolver.Solve(50, [Constraint.Min(40), Constraint.Min(40)]);
+        Assert.Equal(50, Sum(sizes));
+        Assert.True(sizes[0] >= 0 && sizes[1] >= 0);
+    }
 }

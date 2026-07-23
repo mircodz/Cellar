@@ -41,7 +41,14 @@ public class InteractionBenchmarks
         _palette = new CommandPalette();
         string[] verbs = { "Open", "Close", "Go to", "Toggle", "Show", "Hide", "Run", "Copy" };
         string[] nouns = { "File", "Folder", "Snapshot", "Type list", "Instance", "Backtrace", "Retained set", "Theme" };
-        foreach (var v in verbs) foreach (var n in nouns) _palette.Add($"{v} {n}", () => { }, "cmd");
+        foreach (var v in verbs)
+        {
+            foreach (var n in nouns)
+            {
+                _palette.Add($"{v} {n}", () => { }, "cmd");
+            }
+        }
+
         _palette.HasFocus = true;
         _overlay = new Overlay(_palette)
         {

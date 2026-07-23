@@ -30,11 +30,10 @@ public abstract class Widget
 
     // ---- Lifecycle (mount/unmount) ----
     //
-    // A minimal, mount/unmount-only lifecycle: the app notifies the tree when it enters
-    // (Mount) and leaves (Unmount) the live app, so a widget can start/stop background work
-    // (e.g. AsyncContent cancelling its factory, a Skeleton beginning its shimmer). This runs
-    // ONLY at mount/unmount — never per frame — so it adds nothing to the render hot path.
-    // Containers opt in by overriding VisitChildren; leaf widgets need nothing.
+    // The app notifies the tree when it enters (Mount) and leaves (Unmount) the live app, so a
+    // widget can start/stop background work (e.g. AsyncContent cancelling its factory, a Skeleton
+    // beginning its shimmer). This fires only at mount/unmount, not per frame. Containers opt in
+    // by overriding VisitChildren; leaf widgets need nothing.
 
     /// <summary>Called once when the widget enters the live app tree. Override to start
     /// lifecycle-scoped work. Always call the base or drive children via <see cref="VisitChildren"/>.</summary>

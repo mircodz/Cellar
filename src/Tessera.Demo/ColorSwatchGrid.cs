@@ -97,4 +97,4 @@ public sealed class ColorSwatchGrid : Widget
         Repaint.Request(); // self-request a coalesced repaint so the cursor moves without a poll
         return true;
     }
-}
+}

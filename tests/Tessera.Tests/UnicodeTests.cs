@@ -52,4 +52,13 @@ public class UnicodeTests
     {
         Assert.Equal(0, Unicode.StringWidth(""));
     }
+
+    [Fact]
+    public void StringWidth_EmojiVariationSelector_IsWide()
+    {
+        // Base heavy-check-mark (U+2714, width 1) + VS16 (U+FE0F) => emoji presentation,
+        // which terminals render 2 cells wide.
+        Assert.Equal(2, Unicode.StringWidth("✔️"));
+        Assert.Equal(2, Unicode.GraphemeWidth("✔️"));
+    }
 }

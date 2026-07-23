@@ -25,6 +25,11 @@ public sealed class AnsiTerminal : ITerminal
     private volatile bool _pollRunning;
     private Size _lastSize;
 
+    // Reused by Write(StringBuilder) so a steady frame doesn't allocate. Only the loop thread
+    // writes, so no locking is needed.
+    private byte[] _writeBuffer = new byte[4096];
+    private char[] _charBuffer = new char[1024];
+
     public event Action<Size>? Resized;
 
     public AnsiTerminal()
@@ -189,12 +194,39 @@ public sealed class AnsiTerminal : ITerminal
         _stdout.Flush();
     }
 
+    public void Write(StringBuilder ansi)
+    {
+        int len = ansi.Length;
+        if (len == 0)
+        {
+            return;
+        }
+
+        // Copy to a contiguous char span first so encoding sees whole surrogate pairs (chunk
+        // boundaries can split one). UTF-8 is at most 4 bytes per UTF-16 char.
+        if (_charBuffer.Length < len)
+        {
+            _charBuffer = new char[Math.Max(len, _charBuffer.Length * 2)];
+        }
+
+        int maxBytes = len * 4;
+        if (_writeBuffer.Length < maxBytes)
+        {
+            _writeBuffer = new byte[Math.Max(maxBytes, _writeBuffer.Length * 2)];
+        }
+
+        ansi.CopyTo(0, _charBuffer, 0, len);
+        int total = Encoding.UTF8.GetBytes(_charBuffer.AsSpan(0, len), _writeBuffer);
+
+        _stdout.Write(_writeBuffer, 0, total);
+        _stdout.Flush();
+    }
+
     public int ReadInput(Span<byte> buffer, TimeSpan timeout)
     {
-        // On Unix, termios VTIME makes the read itself block-with-timeout, so we just read.
-        // On Windows there is no VTIME, so we wait on the stdin handle for input to arrive
-        // (a single kernel wait — NOT a busy-poll). This keeps the CPU idle and avoids the
-        // ~60 syscalls/sec a KeyAvailable + Sleep(1) spin would cost while nothing happens.
+        // On Unix, termios VTIME makes the read itself block with a timeout, so we just read.
+        // Windows has no VTIME, so we wait on the stdin handle instead of busy-polling with
+        // KeyAvailable + Sleep, which keeps the CPU idle while nothing arrives.
         if (TerminalMode.IsWindows)
         {
             var handle = GetStdHandle(STD_INPUT_HANDLE);

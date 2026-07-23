@@ -58,11 +58,12 @@ public static class LayoutSolver
         const int StackMax = 64;
         int[]? rented = n > StackMax ? new int[n * 2] : null;
         double[]? rentedW = n > StackMax ? new double[n] : null;
-        bool[]? rentedO = n > StackMax ? new bool[n] : null;
+        bool[]? rentedO = n > StackMax ? new bool[n * 2] : null;
         Span<int> min = rented is null ? stackalloc int[n] : rented.AsSpan(0, n);
         Span<int> max = rented is null ? stackalloc int[n] : rented.AsSpan(n, n);
         Span<double> flexWeight = rentedW ?? stackalloc double[n];
-        Span<bool> open = rentedO ?? stackalloc bool[n];
+        Span<bool> open = rentedO is null ? stackalloc bool[n] : rentedO.AsSpan(0, n);
+        Span<bool> proportional = rentedO is null ? stackalloc bool[n] : rentedO.AsSpan(n, n);
         double totalFlexWeight = 0;
         int fixedSum = 0;
 
@@ -81,12 +82,14 @@ public static class LayoutSolver
                     min[i] = max[i] = p;
                     sizes[i] = p;
                     fixedSum += p;
+                    proportional[i] = true;
                     break;
                 case Constraint.Kind.Ratio:
                     int r = (int)Math.Round(total * ((double)c.A / c.B));
                     min[i] = max[i] = r;
                     sizes[i] = r;
                     fixedSum += r;
+                    proportional[i] = true;
                     break;
                 case Constraint.Kind.Min:
                     min[i] = c.A;
@@ -190,8 +193,25 @@ public static class LayoutSolver
             }
         }
 
-        // If fixed constraints overshot the total, shrink from the last slot backward so
-        // the sizes still sum to `total` (never emit negative or overflowing extents).
+        // Independent rounding of Percentage/Ratio slots can leave the sizes a cell or two
+        // short of the total with no flexible slot to absorb it. Hand the shortfall to the
+        // proportional slots left-to-right so the split still tiles exactly.
+        if (remaining > 0 && totalFlexWeight <= 0)
+        {
+            for (int i = 0; i < n && remaining > 0; i++)
+            {
+                if (proportional[i])
+                {
+                    sizes[i]++;
+                    remaining--;
+                }
+            }
+        }
+
+        // If constraints overshot the total, shrink so the sizes still sum to `total`. Shrink
+        // from the last slot backward, but first only from slots that can yield (Length /
+        // Percentage / Ratio go to 0 before a Min slot loses a cell). A last-resort pass
+        // ignores the floor if the Min slots alone still overflow.
         int sum = 0;
         for (int i = 0; i < n; i++)
         {
@@ -199,11 +219,22 @@ public static class LayoutSolver
         }
 
         int overflow = sum - total;
-        for (int i = n - 1; i >= 0 && overflow > 0; i--)
+        for (int pass = 0; pass < 2 && overflow > 0; pass++)
         {
-            int reducible = Math.Min(overflow, sizes[i]);
-            sizes[i] -= reducible;
-            overflow -= reducible;
+            for (int i = n - 1; i >= 0 && overflow > 0; i--)
+            {
+                int floor = pass == 0 && constraints[i].Type == Constraint.Kind.Min
+                    ? min[i]
+                    : 0;
+                int reducible = Math.Min(overflow, sizes[i] - floor);
+                if (reducible <= 0)
+                {
+                    continue;
+                }
+
+                sizes[i] -= reducible;
+                overflow -= reducible;
+            }
         }
     }
 }

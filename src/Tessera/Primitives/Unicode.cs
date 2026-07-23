@@ -14,6 +14,11 @@ public static class Unicode
     public static int RuneWidth(Rune rune)
     {
         int cp = rune.Value;
+        // Printable ASCII is the overwhelming common case; skip the category lookups below.
+        if (cp >= 0x20 && cp < 0x7f)
+        {
+            return 1;
+        }
         if (cp == 0)
         {
             return 0;
@@ -32,6 +37,10 @@ public static class Unicode
         }
         return 1;
     }
+
+    // Emoji variation selector: forces the preceding base character into 2-cell emoji
+    // presentation (e.g. ✔️ ❤️), even though the base alone measures 1.
+    private const int VariationSelector16 = 0xFE0F;
 
     /// <summary>
     /// Display width of a string in cells. Allocation-free: sums each scalar's width. Equals
@@ -58,7 +67,14 @@ public static class Unicode
                 rune = new Rune(c);
                 i += 1;
             }
-            total += RuneWidth(rune);
+
+            int w = RuneWidth(rune);
+            // A following VS16 promotes a text-presentation base to 2-cell emoji width.
+            if (w == 1 && i < text.Length && text[i] == VariationSelector16)
+            {
+                w = 2;
+            }
+            total += w;
         }
         return total;
     }
@@ -71,15 +87,20 @@ public static class Unicode
             return 0;
         }
 
+        int width = 0;
         foreach (var rune in grapheme.EnumerateRunes())
         {
-            int w = RuneWidth(rune);
-            if (w > 0)
+            if (rune.Value == VariationSelector16)
             {
-                return w;
+                return 2; // emoji presentation of whatever base preceded it
+            }
+
+            if (width == 0)
+            {
+                width = RuneWidth(rune);
             }
         }
-        return 0;
+        return width;
     }
 
     private static bool IsZeroWidth(int cp)

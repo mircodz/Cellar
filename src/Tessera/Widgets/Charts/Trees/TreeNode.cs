@@ -10,10 +10,10 @@ namespace Tessera.Widgets.Charts.Trees;
 /// <list type="bullet">
 /// <item><b>Eager</b> — add child nodes directly via <see cref="AddChild(T)"/> or
 /// <see cref="Children"/>.</item>
-/// <item><b>Lazy</b> — provide a <c>childrenFactory</c> that is invoked only the first time
-/// the node is expanded. This is the key to handling huge trees (e.g. a full call-stack
-/// trace): an unexpanded subtree is never materialized, so cost scales with what the user
-/// actually opens, not the tree's total size.</item>
+/// <item><b>Lazy</b> — provide a <c>childrenFactory</c> that runs only the first time the node
+/// is expanded. This is what lets huge trees (e.g. a full call-stack trace) stay cheap: an
+/// unexpanded subtree is never materialized, so cost scales with what the user opens, not the
+/// tree's total size.</item>
 /// </list>
 ///
 /// For lazy nodes that have not yet materialized, <see cref="HasChildren"/> lets a caller

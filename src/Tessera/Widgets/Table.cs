@@ -181,7 +181,10 @@ public sealed class Table : Widget
         });
 
         Rows.Clear();
-        foreach (var k in keyed) Rows.Add(k.row);
+        foreach (var k in keyed)
+        {
+            Rows.Add(k.row);
+        }
     }
 
     // The row order as first sorted, so a None state can restore it. Rows are reference types,
@@ -209,12 +212,18 @@ public sealed class Table : Widget
         var present = new HashSet<string[]>(Rows, ReferenceEqualityComparer.Instance);
         Rows.Clear();
         foreach (var r in _originalOrder)
+        {
             if (present.Remove(r))
             {
                 Rows.Add(r);
             }
+        }
 
-        foreach (var leftover in present) Rows.Add(leftover); // any new rows go at the end
+        foreach (var leftover in present)
+        {
+            Rows.Add(leftover); // any new rows go at the end
+        }
+
         _originalOrder = null;
     }
 
@@ -314,18 +323,28 @@ public sealed class Table : Widget
         if (_headerCells.Length != n)
         {
             _headerCells = new string[n];
+            _headerSortColumn = -2; // force rebuild after a column-count change
         }
-        for (int i = 0; i < n; i++)
+
+        // The sort arrow is the only per-frame variation; rebuild the decorated strings only
+        // when the sort column or direction actually changes, not every render.
+        if (_headerSortColumn != SortColumn || _headerSortDescending != SortDescending)
         {
-            // Sort-direction arrow on the active sort column.
-            _headerCells[i] = i == SortColumn
-                ? Columns[i].Header + (SortDescending ? " ▼" : " ▲")
-                : Columns[i].Header;
+            for (int i = 0; i < n; i++)
+            {
+                _headerCells[i] = i == SortColumn
+                    ? Columns[i].Header + (SortDescending ? " ▼" : " ▲")
+                    : Columns[i].Header;
+            }
+            _headerSortColumn = SortColumn;
+            _headerSortDescending = SortDescending;
         }
         return _headerCells;
     }
 
     private string[] _headerCells = Array.Empty<string>();
+    private int _headerSortColumn = -2;
+    private bool _headerSortDescending;
 
     // Captures each header cell's screen x-range and the header row, for click hit-testing.
     private void RecordHeaderHits(Rect area, int[] widths, int y)

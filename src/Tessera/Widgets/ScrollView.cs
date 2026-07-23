@@ -45,12 +45,19 @@ public sealed class ScrollView : Widget
         }
 
         var theme = Theme.Current;
-        bool needsBar = ShowScrollbar;
+
+        // Measure at the full width first; only reserve the scrollbar column if the content
+        // actually overflows. Reserving unconditionally squeezes content that fits and leaves
+        // a dead blank column. Overflow can change with the narrower width (re-wrapping), so
+        // re-measure once when we take the column.
+        var full = Child.Measure(new Size(area.Width, int.MaxValue / 2));
+        bool needsBar = ShowScrollbar && full.Height > area.Height;
         int barWidth = needsBar ? 1 : 0;
         var contentArea = new Rect(area.X, area.Y, Math.Max(0, area.Width - barWidth), area.Height);
 
-        // Ask the child how tall it wants to be at the content width.
-        var desired = Child.Measure(new Size(contentArea.Width, int.MaxValue / 2));
+        var desired = needsBar
+            ? Child.Measure(new Size(contentArea.Width, int.MaxValue / 2))
+            : full;
         _contentHeight = Math.Max(desired.Height, contentArea.Height);
         _viewportHeight = contentArea.Height;
 

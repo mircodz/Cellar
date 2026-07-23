@@ -9,9 +9,9 @@ using Tessera.Theming;
 namespace Tessera.Widgets.Charts;
 
 /// <summary>
-/// A flame graph (rendered as a top-down icicle) for hierarchical cost — allocation stacks,
-/// CPU samples, retained sizes. Each frame's width is its weight relative to the zoomed root.
-/// Click (or Enter) to zoom in, Backspace/Escape to zoom out, arrows to move selection.
+/// A flame graph (rendered as a top-down icicle) for hierarchical cost such as allocation
+/// stacks, CPU samples, or retained sizes. Each frame's width is its weight relative to the
+/// zoomed root. Click (or Enter) to zoom in, Backspace/Escape to zoom out, arrows to move selection.
 /// </summary>
 public sealed class FlameGraph<T> : Widget
 {
@@ -104,9 +104,8 @@ public sealed class FlameGraph<T> : Widget
         surface.FillRect(rect, new Style(fg, fillBg));
         _hits.Add((rect, node));
 
-        // Frame label, if it fits (leave a 1-cell inset). Only ask for the label when the
-        // frame is wide enough to show one — this skips per-frame string work for the many
-        // sub-3-cell frames in a deep graph.
+        // Frame label, if it fits (leave a 1-cell inset). Skip it for the many sub-3-cell frames
+        // in a deep graph, which avoids the string work for labels that couldn't show anyway.
         if (width >= 3)
         {
             string label = LabelSelector?.Invoke(node) ?? node.Label;

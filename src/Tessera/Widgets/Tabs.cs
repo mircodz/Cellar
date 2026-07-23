@@ -48,7 +48,8 @@ public sealed class Tab
 /// <summary>
 /// A tabbed container: a one-line tab bar above the active tab's content. Left/Right (or
 /// Shift+Tab/Tab) cycle, number keys 1-9 jump, a click selects. The bar is drawn by
-/// <see cref="RenderBar"/>, isolated from selection logic (a future <c>ITabsRenderer</c> seam).
+/// <see cref="RenderBar"/>, kept separate from selection logic so it could move behind an
+/// <c>ITabsRenderer</c> later.
 /// </summary>
 public sealed class Tabs : Widget
 {
@@ -170,7 +171,7 @@ public sealed class Tabs : Widget
         }
     }
 
-    // --- Isolated bar renderer (future ITabsRenderer seam). tmux-style. ---
+    // --- Bar renderer (tmux-style), kept separate so it could move behind ITabsRenderer. ---
     private void RenderBar(Surface surface, Rect area)
     {
         _hitRects.Clear();

@@ -44,6 +44,14 @@ public sealed class Spinner : Widget
 {
     private int _frame;
 
+    // Tick of the last auto-advance, so Interval throttles the glyph step without a timer/thread.
+    private long _lastStepTicks;
+
+    // Cached label render text + the inputs it was built from (see Render).
+    private StyledText? _labelCache;
+    private string? _cachedLabel;
+    private Color _cachedLabelFg;
+
     public SpinnerFrames Frames { get; set; }
 
     /// <summary>Optional label shown after the spinner glyph (e.g. "Scanning heap…").</summary>
@@ -52,19 +60,15 @@ public sealed class Spinner : Widget
     /// <summary>Spinner glyph color. Null uses the theme accent.</summary>
     public Color? Color { get; set; }
 
-    /// <summary>When true, the spinner drives its own animation via the app's coalesced repaint
-    /// path — no need for a consumer to call <see cref="Advance"/>. It is <b>idle when hidden</b>:
-    /// it only advances/requests a repaint from inside <see cref="Render"/>, so a spinner that isn't
-    /// on screen (e.g. an inactive tab) is never rendered, never asks for a frame, and runs no timer.
-    /// Off by default to preserve the manual, consumer-pumped behavior.</summary>
+    /// <summary>When true, the spinner drives its own animation through Repaint, so the caller
+    /// doesn't have to call <see cref="Advance"/>. It only advances and requests a repaint from
+    /// inside <see cref="Render"/>, so a spinner that's off screen (e.g. on an inactive tab) does
+    /// nothing and runs no timer. Off by default, which keeps the manual, caller-pumped behavior.</summary>
     public bool AutoAnimate { get; set; }
 
     /// <summary>Minimum wall-clock between auto-advance frame steps. The render loop is frame-capped
     /// (~60fps); this throttles the glyph so it spins at a readable rate independent of frame rate.</summary>
     public TimeSpan Interval { get; set; } = TimeSpan.FromMilliseconds(80);
-
-    // Tick of the last auto-advance, so Interval throttles the glyph step without a timer/thread.
-    private long _lastStepTicks;
 
     public Spinner(SpinnerFrames? frames = null, string? label = null)
     {
@@ -142,9 +146,4 @@ public sealed class Spinner : Widget
             }
         }
     }
-
-    // Cached label render text + the inputs it was built from (see Render).
-    private StyledText? _labelCache;
-    private string? _cachedLabel;
-    private Color _cachedLabelFg;
 }

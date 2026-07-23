@@ -21,12 +21,14 @@ public class CompositorBenchmarks
 
     private Screen _screen = null!;
     private Screen _steady = null!;
+    private string _row = null!;
     private readonly Style _style = new(Color.Rgb(200, 200, 200), Color.Rgb(20, 20, 30));
 
     [GlobalSetup]
     public void Setup()
     {
         _screen = new Screen(Width, Height, ColorDepth.TrueColor);
+        _row = new string('x', Width); // reused so PaintFrame itself doesn't allocate
 
         // A screen already showing a full frame, so a re-render with the same content
         // measures the no-change diff path.
@@ -36,12 +38,13 @@ public class CompositorBenchmarks
         PaintFrame(_steady.Back);
     }
 
-    // Fills every cell with styled text — the worst case for the diff (all cells change).
+    // Fills every cell with styled text. Uses a cached row string so the benchmark measures
+    // the compositor, not string allocation.
     private void PaintFrame(Surface s)
     {
         for (int y = 0; y < s.Height; y++)
         {
-            s.DrawText(0, y, new string('x', s.Width), _style);
+            s.DrawText(0, y, _row, _style);
         }
     }
 
@@ -49,15 +52,16 @@ public class CompositorBenchmarks
     public int FullFrameDiff()
     {
         PaintFrame(_screen.Back);
-        return _screen.ComputeDiff().Length;
+        return _screen.BuildDiff().Length;
     }
 
     [Benchmark(Description = "No-change diff (steady state)")]
     public int NoChangeDiff()
     {
-        // Content identical to the front buffer: the diff should emit nothing.
+        // Content identical to the front buffer: the diff should emit nothing and allocate
+        // nothing (BuildDiff reuses its StringBuilder; the promote-copy is skipped).
         PaintFrame(_steady.Back);
-        return _steady.ComputeDiff().Length;
+        return _steady.BuildDiff().Length;
     }
 
     [Benchmark(Description = "DrawText ASCII, one full row")]

@@ -6,9 +6,8 @@ using Tessera.Primitives;
 namespace Tessera.Rendering;
 
 /// <summary>
-/// Renders a <see cref="Surface"/> to a standalone SVG string — a pixel-accurate "screenshot"
-/// of a terminal frame, useful for documentation, bug reports, and README images. Each cell
-/// becomes a background rect (runs of equal background are coalesced) plus its glyph in a
+/// Renders a <see cref="Surface"/> to a standalone SVG string, for docs and README images.
+/// Each cell becomes a background rect (equal-background runs are coalesced) plus its glyph in a
 /// monospace font. Colors resolve to <c>#rrggbb</c>: truecolor directly, the 16 ANSI colors via
 /// a standard xterm palette, and default fg/bg via <see cref="DefaultForeground"/>/<see cref="DefaultBackground"/>.
 /// </summary>
@@ -75,7 +74,7 @@ public sealed class SvgRenderer
         }
 
         // Block-element glyphs (bars, fills, thumbs) render as exact <rect>s in the cell's
-        // foreground color, not as text — so they tile seamlessly with no font baseline gaps.
+        // foreground color rather than text, so they tile with no font baseline gaps.
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
@@ -93,9 +92,9 @@ public sealed class SvgRenderer
             }
         }
 
-        // Glyphs: one <text> per non-blank cell, each pinned to its own grid column and forced to
-        // the cell width. Per-cell (not per-run) so nothing accumulates sub-pixel drift — every
-        // glyph is independently aligned. Block-element cells were already drawn as rects above.
+        // Glyphs: one <text> per non-blank cell, pinned to its own column and forced to the cell
+        // width. Done per-cell so glyphs don't accumulate sub-pixel drift across a row. Block
+        // cells were already drawn as rects above.
         sb.Append("<g font-family=\"").Append(Escape(FontFamily)).Append("\" font-size=\"")
           .Append(FontSize.ToString(CultureInfo.InvariantCulture)).Append("\" text-anchor=\"middle\">\n");
         for (int y = 0; y < h; y++)
@@ -127,8 +126,8 @@ public sealed class SvgRenderer
           .Append("\" fill=\"").Append(Hex(color)).Append("\"/>\n");
     }
 
-    // One glyph pinned to its own cell span. Centered (text-anchor=middle) at the column's
-    // mid-point and forced to the cell width, so every glyph lands on the grid with no drift.
+    // Draws one glyph centered (text-anchor=middle) at the column's mid-point and forced to the
+    // cell width, so it lands on the grid without drift.
     private void AppendGlyph(StringBuilder sb, int col, int row, string glyph, Style style, int cells)
     {
         var fg = ResolveFg(style.Foreground);

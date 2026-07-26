@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -22,15 +23,28 @@ public sealed class App : IDisposable
     private readonly List<Overlay> _overlays = new();
     private Screen _screen;
     private Size _size;
-    private bool _running;
-    private bool _dirty = true;
+    private Widget? _root;
+    private volatile bool _running;
+    private volatile bool _dirty = true;
 
-    // Mouse text selection state (screen-wide, terminal-like).
     private Selection? _selection;
     private bool _selecting;
 
-    /// <summary>The root widget rendered each frame. Set before or during <see cref="RunAsync"/>.</summary>
-    public Widget? Root { get; set; }
+    /// <summary>The root widget. Set it before calling <see cref="RunAsync"/>.</summary>
+    public Widget? Root
+    {
+        get => _root;
+        set
+        {
+            if (_running && !ReferenceEquals(_root, value))
+            {
+                throw new InvalidOperationException(
+                    "Root cannot be replaced while the app is running. Use a container such as Navigator.");
+            }
+
+            _root = value;
+        }
+    }
 
     /// <summary>The current terminal size in cells.</summary>
     public Size Size => _size;
@@ -128,10 +142,8 @@ public sealed class App : IDisposable
         _messages.Writer.TryWrite(Wake);
     }
 
-    // A sentinel message whose only purpose is to wake the event loop (no side effect).
     private static readonly object Wake = new();
-
-    // ---- Overlays / layers ----
+    private sealed record InputPumpFailure(Exception Error);
 
     /// <summary>The current overlay stack, bottom-to-top (last is topmost).</summary>
     public IReadOnlyList<Overlay> Overlays => _overlays;
@@ -144,6 +156,7 @@ public sealed class App : IDisposable
     {
         _overlays.Add(overlay);
         overlay.Content.HasFocus = true;
+        MountOverlay(overlay);
         _dirty = true;
     }
 
@@ -158,8 +171,8 @@ public sealed class App : IDisposable
         var top = _overlays[^1];
         _overlays.RemoveAt(_overlays.Count - 1);
         top.Content.HasFocus = false;
+        UnmountOverlay(top);
         top.OnDismiss?.Invoke();
-        // Restore focus to the new top overlay, if any.
         if (_overlays.Count > 0)
         {
             _overlays[^1].Content.HasFocus = true;
@@ -180,6 +193,7 @@ public sealed class App : IDisposable
 
         _overlays.RemoveAt(idx);
         overlay.Content.HasFocus = false;
+        UnmountOverlay(overlay);
         overlay.OnDismiss?.Invoke();
         if (_overlays.Count > 0)
         {
@@ -189,44 +203,63 @@ public sealed class App : IDisposable
         _dirty = true;
     }
 
+    private readonly HashSet<Overlay> _mountedOverlays = new();
+
+    private void MountOverlay(Overlay overlay)
+    {
+        if (_running && _mountedOverlays.Add(overlay))
+        {
+            overlay.Content.Mount(this);
+        }
+    }
+
+    private void UnmountOverlay(Overlay overlay)
+    {
+        if (_mountedOverlays.Remove(overlay))
+        {
+            overlay.Content.Unmount();
+        }
+    }
+
     /// <summary>Runs the loop until <see cref="Quit"/> is called or the token is cancelled.</summary>
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        _terminal.EnterRawMode();
         _running = true;
-
-        // Wire up Repaint for the duration of the loop, so widgets (spinners, skeletons, async
-        // loaders) can request a coalesced repaint from within themselves.
-        Repaint.Callback = Invalidate;
-
-        // Enable any-motion tracking so widgets receive bare hover (Move) events. This is a
-        // high-frequency stream; apps on slow links can turn it off via MouseHoverEnabled.
-        if (MouseHoverEnabled)
-        {
-            _terminal.Write(Terminal.Ansi.EnableMotion);
-        }
-
-        // Background reader: pull raw bytes and push decoded events onto the channel.
-        var readerTask = Task.Run(() => InputPump(cancellationToken), cancellationToken);
+        bool rawModeEntered = false;
+        bool motionEnabled = false;
+        Task? readerTask = null;
 
         try
         {
-            Root?.Mount(this); // notify the tree it entered the live app (starts lifecycles)
-            Render(); // initial paint
+            _terminal.EnterRawMode();
+            rawModeEntered = true;
+            Repaint.Callback = Invalidate;
+
+            if (MouseHoverEnabled)
+            {
+                _terminal.Write(Terminal.Ansi.EnableMotion);
+                motionEnabled = true;
+            }
+
+            readerTask = Task.Run(() => InputPump(cancellationToken), CancellationToken.None);
+
+            Root?.Mount(this);
+            foreach (var overlay in _overlays)
+            {
+                MountOverlay(overlay);
+            }
+
+            _dirty = false;
+            Render();
             long lastRenderTicks = Environment.TickCount64;
 
-            // Block until a message arrives (input, resize, or a Post), so an idle app does no
-            // work. Then drain everything pending and render at most once. Renders are coalesced
-            // to FrameInterval so a burst of messages can't drive the display past the frame cap.
             while (_running && !cancellationToken.IsCancellationRequested)
             {
-                // Park in the kernel/scheduler until there's something to do.
                 if (!await _messages.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    break; // channel completed
+                    break;
                 }
 
-                // Drain every pending message before rendering (coalesces a burst into 1 frame).
                 while (_messages.Reader.TryRead(out var msg))
                 {
                     Dispatch(msg);
@@ -234,40 +267,60 @@ public sealed class App : IDisposable
 
                 if (_dirty)
                 {
-                    // Cap the render rate: if we rendered very recently, wait out the remainder
-                    // of the frame interval so rapid updates coalesce instead of thrashing.
                     long sinceLast = Environment.TickCount64 - lastRenderTicks;
                     long frameMs = (long)FrameInterval.TotalMilliseconds;
                     if (sinceLast < frameMs)
                     {
                         await Task.Delay((int)(frameMs - sinceLast), cancellationToken).ConfigureAwait(false);
-                        // Drain anything that arrived during the coalescing delay.
                         while (_messages.Reader.TryRead(out var msg))
                         {
                             Dispatch(msg);
                         }
                     }
 
-                    Render();
                     _dirty = false;
+                    Render();
                     lastRenderTicks = Environment.TickCount64;
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // normal shutdown
         }
         finally
         {
             _running = false;
-            Root?.Unmount(); // let the tree cancel background work / release lifecycle resources
-            Repaint.Callback = null;
-            if (MouseHoverEnabled)
+            try
             {
-                _terminal.Write(Terminal.Ansi.DisableMotion);
+                if (readerTask is not null)
+                {
+                    await readerTask.ConfigureAwait(false);
+                }
+
+                for (int i = _overlays.Count - 1; i >= 0; i--)
+                {
+                    UnmountOverlay(_overlays[i]);
+                }
+                Root?.Unmount();
             }
-            _terminal.LeaveRawMode();
+            finally
+            {
+                Repaint.Callback = null;
+                try
+                {
+                    if (motionEnabled)
+                    {
+                        _terminal.Write(Terminal.Ansi.DisableMotion);
+                    }
+                }
+                finally
+                {
+                    if (rawModeEntered)
+                    {
+                        _terminal.LeaveRawMode();
+                    }
+                }
+            }
         }
     }
 
@@ -275,7 +328,12 @@ public sealed class App : IDisposable
     {
         if (ReferenceEquals(msg, Wake))
         {
-            return; // wake sentinel: its only job was to unblock the loop
+            return;
+        }
+
+        if (msg is InputPumpFailure failure)
+        {
+            ExceptionDispatchInfo.Capture(failure.Error).Throw();
         }
 
         if (msg is ResizeEvent resize)
@@ -304,12 +362,10 @@ public sealed class App : IDisposable
 
     private void DispatchInput(InputEvent input)
     {
-        // Topmost overlay gets first crack at input.
         if (_overlays.Count > 0)
         {
             var top = _overlays[^1];
 
-            // Escape dismisses a dismiss-on-escape overlay before anything else sees it.
             if (input is KeyEvent { Key: Key.Escape } && top.DismissOnEscape)
             {
                 PopOverlay();
@@ -317,15 +373,12 @@ public sealed class App : IDisposable
             }
 
             bool handledByOverlay = top.Content.OnEvent(input);
-            // A modal overlay swallows all input whether or not its content used it; a
-            // non-modal overlay lets unhandled input fall through to lower layers.
             if (handledByOverlay || top.Modal)
             {
                 return;
             }
         }
 
-        // Ctrl+C copies an active selection to the clipboard (when selection is enabled).
         if (MouseSelectionEnabled && _selection is { IsEmpty: false } &&
             input is KeyEvent { Modifiers: KeyModifiers.Control } k && k.Rune.Value == 'c')
         {
@@ -339,7 +392,6 @@ public sealed class App : IDisposable
             appHandled = Root?.OnEvent(input) ?? false;
         }
 
-        // If nothing else claimed a mouse event, treat left-drag as a screen text selection.
         if (!appHandled && MouseSelectionEnabled && input is MouseEvent m)
         {
             HandleSelectionMouse(m);
@@ -383,8 +435,6 @@ public sealed class App : IDisposable
 
         var back = _screen.Back;
 
-        // The compositor substitutes this for any default-background cell, so a bare Clear +
-        // widget draws all land on one solid background. Null keeps them transparent.
         _screen.DefaultBackground = Background ?? Theming.Theme.Current.Background;
         back.Clear(Style.Default);
 
@@ -396,21 +446,17 @@ public sealed class App : IDisposable
             back.ResetClip();
         }
 
-        // Overlays render on top, bottom-to-top, each dimming the content beneath it.
         foreach (var overlay in _overlays)
         {
             overlay.Render(back, _size);
         }
 
-        // The text selection highlight sits above everything (only over the base content,
-        // not overlays — a modal takes focus, so we suppress the highlight while one is open).
         if (_selection is { IsEmpty: false } sel && _overlays.Count == 0)
         {
             var theme = Theming.Theme.Current;
             back.HighlightSelection(sel, theme.SelectionForeground, theme.SelectionBackground);
         }
 
-        // The debug HUD draws last, on top of everything. It takes no input.
         if (Debug is { } debug)
         {
             var area = DebugBounds.Intersect(back.Bounds);
@@ -425,7 +471,6 @@ public sealed class App : IDisposable
             _terminal.Write(diff);
         }
 
-        // Feed this frame's stats back to the HUD for the next frame's sparklines.
         if (Debug is { } d)
         {
             long allocated = GC.GetAllocatedBytesForCurrentThread() - startAlloc;
@@ -437,25 +482,31 @@ public sealed class App : IDisposable
 
     private void InputPump(CancellationToken ct)
     {
-        var buffer = new byte[1024];
-        while (!ct.IsCancellationRequested && _running)
+        try
         {
-            int read = _terminal.ReadInput(buffer, TimeSpan.FromMilliseconds(50));
-            if (read > 0)
+            var buffer = new byte[1024];
+            while (!ct.IsCancellationRequested && _running)
             {
-                foreach (var ev in _decoder.Feed(buffer.AsSpan(0, read)))
+                int read = _terminal.ReadInput(buffer, TimeSpan.FromMilliseconds(50));
+                if (read > 0)
                 {
-                    _messages.Writer.TryWrite(ev);
+                    foreach (var ev in _decoder.Feed(buffer.AsSpan(0, read)))
+                    {
+                        _messages.Writer.TryWrite(ev);
+                    }
+                }
+                else
+                {
+                    foreach (var ev in _decoder.Flush())
+                    {
+                        _messages.Writer.TryWrite(ev);
+                    }
                 }
             }
-            else
-            {
-                // Idle: resolve a lone pending ESC into an Escape key.
-                foreach (var ev in _decoder.Flush())
-                {
-                    _messages.Writer.TryWrite(ev);
-                }
-            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && _running)
+        {
+            _messages.Writer.TryWrite(new InputPumpFailure(ex));
         }
     }
 

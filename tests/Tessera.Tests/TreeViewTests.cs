@@ -54,7 +54,7 @@ public class TreeViewTests
 
         // Expanding the root materializes exactly one level.
         tree.Roots[0].Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
         tree.Render(s, s.Bounds);
         Assert.Equal(1, factoryCalls);
     }
@@ -87,7 +87,7 @@ public class TreeViewTests
             node.Expand();
             node = node.Children[0];
         }
-        tree.Invalidate();
+        tree.MarkDirty();
         tree.Render(s, s.Bounds);
 
         // Exactly 3 factory invocations (one per expanded level), not the whole tree.
@@ -97,37 +97,27 @@ public class TreeViewTests
     // ---- Flattening & visibility ----
 
     [Fact]
-    public void CollapsedRoot_ShowsOnlyRoot()
+    public void Flattening_RespectsExpansionState()
     {
-        var tree = SimpleTree(out _);
-        var s = new Surface(20, 5);
+        // Collapsed: only the root is visible.
+        var tree = SimpleTree(out var root);
+        var s = new Surface(20, 8);
         tree.Render(s, s.Bounds);
         Assert.Contains("root", RowText(s, 0));
         Assert.DoesNotContain("a", RowText(s, 1).Trim());
-    }
 
-    [Fact]
-    public void ExpandedTree_ShowsChildren()
-    {
-        var tree = SimpleTree(out var root);
+        // One level expanded: direct children show, grandchildren stay hidden.
         root.Expand();
-        tree.Invalidate();
-        var s = new Surface(20, 6);
+        tree.MarkDirty();
         tree.Render(s, s.Bounds);
-        var all = string.Join("\n", Enumerable.Range(0, 6).Select(y => RowText(s, y)));
-        Assert.Contains("root", all);
-        Assert.Contains("a", all);
-        Assert.Contains("b", all);
-        Assert.DoesNotContain("a1", all); // 'a' not yet expanded
-    }
+        var oneLevel = string.Join("\n", Enumerable.Range(0, 8).Select(y => RowText(s, y)));
+        Assert.Contains("a", oneLevel);
+        Assert.Contains("b", oneLevel);
+        Assert.DoesNotContain("a1", oneLevel);
 
-    [Fact]
-    public void FullyExpanded_ShowsAllDescendants()
-    {
-        var tree = SimpleTree(out var root);
+        // Fully expanded: every descendant is visible.
         root.ExpandAll();
-        tree.Invalidate();
-        var s = new Surface(20, 8);
+        tree.MarkDirty();
         tree.Render(s, s.Bounds);
         var all = string.Join("\n", Enumerable.Range(0, 8).Select(y => RowText(s, y)));
         foreach (var label in new[] { "root", "a", "a1", "a2", "b" })
@@ -143,7 +133,7 @@ public class TreeViewTests
     {
         var tree = SimpleTree(out var root);
         root.Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
         var s = new Surface(20, 6);
         tree.HasFocus = true;
         tree.Render(s, s.Bounds);
@@ -171,7 +161,7 @@ public class TreeViewTests
     {
         var tree = SimpleTree(out var root);
         root.Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
         var s = new Surface(20, 6);
         tree.HasFocus = true;
         tree.Render(s, s.Bounds);
@@ -202,7 +192,7 @@ public class TreeViewTests
     {
         var tree = SimpleTree(out var root);
         root.ExpandAll();
-        tree.Invalidate();
+        tree.MarkDirty();
         var s = new Surface(20, 8);
         tree.HasFocus = true;
         tree.Render(s, s.Bounds);
@@ -225,7 +215,7 @@ public class TreeViewTests
         Assert.Contains("▶", RowText(s, 0)); // collapsed caret on root
 
         root.Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
         tree.Render(s, s.Bounds);
         Assert.Contains("▼", RowText(s, 0)); // expanded caret
     }
@@ -235,7 +225,7 @@ public class TreeViewTests
     {
         var tree = SimpleTree(out var root);
         root.Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
         var s = new Surface(20, 6);
         tree.Render(s, s.Bounds);
         var all = string.Join("\n", Enumerable.Range(0, 6).Select(y => RowText(s, y)));
@@ -249,11 +239,11 @@ public class TreeViewTests
         var tree = SimpleTree(out var root);
         tree.Guides = TreeGuides.Ascii;
         root.Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
         var s = new Surface(20, 6);
         tree.Render(s, s.Bounds);
         var all = string.Join("\n", Enumerable.Range(0, 6).Select(y => RowText(s, y)));
-        Assert.Contains("+", all[0].ToString().Length > 0 ? all : all); // collapsed caret '+'
+        Assert.Contains("+", all);
     }
 
     [Fact]
@@ -268,7 +258,7 @@ public class TreeViewTests
         }
 
         root.Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
 
         var s = new Surface(20, 5);
         tree.Render(s, s.Bounds); // must not throw and only fills 5 rows
@@ -280,7 +270,7 @@ public class TreeViewTests
     {
         var tree = SimpleTree(out var root);
         root.Expand();
-        tree.Invalidate();
+        tree.MarkDirty();
         string? selected = null;
         tree.OnSelect = n => selected = n.Value;
         var s = new Surface(20, 6);
@@ -305,7 +295,7 @@ public class TreeViewTests
         var child = root.AddChild("child");
         child.AddChild("grandchild");
         root.ExpandAll();
-        tree.Invalidate();
+        tree.MarkDirty();
 
         var s = new Surface(40, 6);
         tree.Render(s, s.Bounds);
@@ -328,7 +318,7 @@ public class TreeViewTests
         var tree = new TreeView<string> { RenderLabel = n => StyledText.Of(n.Value), ShowHeader = true };
         tree.Columns.Add(new TreeColumn<string>("time", 8, n => StyledText.Of("1ms")));
         tree.AddRoot("root");
-        tree.Invalidate();
+        tree.MarkDirty();
 
         var s = new Surface(30, 4);
         tree.Render(s, s.Bounds);
@@ -343,7 +333,7 @@ public class TreeViewTests
         tree.Columns.Add(new TreeColumn<string>("c", 4, n => StyledText.Of("x")));
         var root = tree.AddRoot("root");
         root.AddChild("a");
-        tree.Invalidate();
+        tree.MarkDirty();
 
         var s = new Surface(20, 5);
         tree.HasFocus = true;
@@ -408,7 +398,7 @@ public class TreeViewTests
         a.AddChild("A1");
         root.AddChild("B");
         root.ExpandAll();
-        tree.Invalidate();
+        tree.MarkDirty();
 
         var s = new Surface(20, 5);
         tree.Render(s, s.Bounds);

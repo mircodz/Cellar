@@ -45,10 +45,10 @@ public class WidgetBenchmarks
         _table = new Table { ShowHeader = true, SelectedIndex = 3, Striped = true, Sortable = true };
         _table.Columns.Add(new Column("Location", Constraint.Fill(3)));
         _table.Columns.Add(new Column("Allocator", Constraint.Fill(2)));
-        _table.Columns.Add(new Column("MiB", Constraint.Length(10), Alignment.Right)
+        _table.Columns.Add(new Column("MiB", Constraint.Length(10), Justify.Right)
             { SortKey = s => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture) });
-        _table.Columns.Add(new Column("Count", Constraint.Length(9), Alignment.Right));
-        _table.Columns.Add(new Column("Own%", Constraint.Length(7), Alignment.Right));
+        _table.Columns.Add(new Column("Count", Constraint.Length(9), Justify.Right));
+        _table.Columns.Add(new Column("Own%", Constraint.Length(7), Justify.Right));
         for (int i = 0; i < Rows; i++)
         {
             _table.Rows.Add(new[] { $"Frame.Method_{i}", "GC.Allocate", $"{i * 3.5:0.0}", $"{i * 128}", $"{i % 100}.0" });
@@ -63,14 +63,14 @@ public class WidgetBenchmarks
         }
 
         wideRoot.Expand();
-        _wideTree.Invalidate();
+        _wideTree.MarkDirty();
 
         // A deep tree: a single chain `Rows` levels deep, fully expanded.
         _deepTree = new TreeView<int> { RenderLabel = n => StyledText.Of($"level {n.Value}") };
         var node = _deepTree.AddRoot(0);
         for (int i = 1; i <= Rows; i++) { var c = node.AddChild(i); node.Expand(); node = c; }
         node.Expand();
-        _deepTree.Invalidate();
+        _deepTree.MarkDirty();
 
         _appFrame = BuildAppFrame();
         _chartTab = BuildChartTab();
@@ -102,8 +102,8 @@ public class WidgetBenchmarks
             Values = { ("heap", 42), ("stack", 18), ("code", 27), ("meta", 9), ("jit", 33) },
             BarColors =
             {
-                Colors.Hex("#6a9fb5"), Colors.Hex("#90a959"), Colors.Hex("#f4bf75"),
-                Colors.Hex("#aa759f"), Colors.Hex("#ac4142"),
+                Color.Hex("#6a9fb5"), Color.Hex("#90a959"), Color.Hex("#f4bf75"),
+                Color.Hex("#aa759f"), Color.Hex("#ac4142"),
             },
         };
 
@@ -112,20 +112,20 @@ public class WidgetBenchmarks
             ShowInlineLabels = true,
             Segments =
             {
-                new Segment("String", 42, Colors.Hex("#6a9fb5")),
-                new Segment("Byte[]", 23, Colors.Hex("#90a959")),
-                new Segment("Dictionary", 15, Colors.Hex("#f4bf75")),
-                new Segment("Node", 12, Colors.Hex("#aa759f")),
-                new Segment("other", 8, Colors.Hex("#505050")),
+                new Segment("String", 42, Color.Hex("#6a9fb5")),
+                new Segment("Byte[]", 23, Color.Hex("#90a959")),
+                new Segment("Dictionary", 15, Color.Hex("#f4bf75")),
+                new Segment("Node", 12, Color.Hex("#aa759f")),
+                new Segment("other", 8, Color.Hex("#505050")),
             },
         };
         var compLegend = new Legend
         {
             Items =
             {
-                new LegendItem("String", Colors.Hex("#6a9fb5"), "42%"),
-                new LegendItem("Byte[]", Colors.Hex("#90a959"), "23%"),
-                new LegendItem("Dictionary", Colors.Hex("#f4bf75"), "15%"),
+                new LegendItem("String", Color.Hex("#6a9fb5"), "42%"),
+                new LegendItem("Byte[]", Color.Hex("#90a959"), "23%"),
+                new LegendItem("Dictionary", Color.Hex("#f4bf75"), "15%"),
             },
         };
 
@@ -143,14 +143,14 @@ public class WidgetBenchmarks
             cosine.Add(t, System.Math.Cos(t * 0.7));
             noise.Add(t, System.Math.Sin(t * 1.3) * 0.6);
         }
-        lines.SeriesList.Add(sine);
-        lines.SeriesList.Add(cosine);
-        lines.SeriesList.Add(noise);
+        lines.Series.Add(sine);
+        lines.Series.Add(cosine);
+        lines.Series.Add(noise);
 
         var legend = new Label(
-            StyledText.Of("● sin ").Fg(Colors.Hex("#6a9fb5"))
-                .Append("● cos ").Fg(Colors.Hex("#90a959"))
-                .Append("● walk").Fg(Colors.Hex("#aa759f")));
+            StyledText.Of("● sin ").Fg(Color.Hex("#6a9fb5"))
+                .Append("● cos ").Fg(Color.Hex("#90a959"))
+                .Append("● walk").Fg(Color.Hex("#aa759f")));
 
         var chartHeader = new Stack(Direction.Horizontal)
             .Add(new Rule(StyledText.Of("line chart — f(time), multi-series")), Constraint.Fill())

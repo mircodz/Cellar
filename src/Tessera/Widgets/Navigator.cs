@@ -30,6 +30,10 @@ public sealed class Navigator : Widget
 {
     private readonly List<Page> _stack = new();
 
+    // Tracks mounted pages so child lifecycles stop on pop or teardown.
+    private App? _app;
+    private readonly HashSet<Page> _mounted = new();
+
     // The breadcrumb bar's row and each segment's clickable x-range (captured on render).
     private int _breadcrumbRow = -1;
     private readonly List<(int start, int end, int index)> _crumbHits = new();
@@ -53,6 +57,38 @@ public sealed class Navigator : Widget
         }
     }
 
+    protected override void OnMount(App app) => _app = app;
+
+    protected override void OnUnmount() => _app = null;
+
+    protected override void VisitChildren(Action<Widget> visit)
+    {
+        // MountPage is the sole mounter; only those pages participate in teardown.
+        foreach (var page in _stack)
+        {
+            if (_mounted.Contains(page))
+            {
+                visit(page.Content);
+            }
+        }
+    }
+
+    private void MountPage(Page page)
+    {
+        if (_app is { } app && _mounted.Add(page))
+        {
+            page.Content.Mount(app);
+        }
+    }
+
+    private void UnmountPage(Page page)
+    {
+        if (_mounted.Remove(page))
+        {
+            page.Content.Unmount();
+        }
+    }
+
     /// <summary>The page currently shown (top of the stack), or null when empty.</summary>
     public Page? Current => _stack.Count > 0 ? _stack[^1] : null;
 
@@ -72,6 +108,7 @@ public sealed class Navigator : Widget
 
         _stack.Add(page);
         page.Content.HasFocus = true;
+        MountPage(page);
         OnNavigate?.Invoke(page);
     }
 
@@ -83,12 +120,13 @@ public sealed class Navigator : Widget
     {
         if (_stack.Count <= 1)
         {
-            return null; // keep the root
+            return null;
         }
 
         var top = _stack[^1];
         _stack.RemoveAt(_stack.Count - 1);
         top.Content.HasFocus = false;
+        UnmountPage(top);
         if (Current is not null)
         {
             Current.Content.HasFocus = true;
@@ -103,6 +141,7 @@ public sealed class Navigator : Widget
     {
         while (_stack.Count > 1)
         {
+            UnmountPage(_stack[^1]);
             _stack.RemoveAt(_stack.Count - 1);
         }
 
@@ -120,7 +159,7 @@ public sealed class Navigator : Widget
     {
         if (index < 0 || index >= _stack.Count - 1)
         {
-            return; // out of range or already on top
+            return;
         }
 
         if (Current is not null)
@@ -130,6 +169,7 @@ public sealed class Navigator : Widget
 
         while (_stack.Count > index + 1)
         {
+            UnmountPage(_stack[^1]);
             _stack.RemoveAt(_stack.Count - 1);
         }
 
@@ -144,9 +184,15 @@ public sealed class Navigator : Widget
     /// <summary>Replaces the entire stack with a single root page.</summary>
     public void Reset(Page root)
     {
+        foreach (var page in _stack)
+        {
+            UnmountPage(page);
+        }
+
         _stack.Clear();
         _stack.Add(root);
         root.Content.HasFocus = true;
+        MountPage(root);
         OnNavigate?.Invoke(root);
     }
 
@@ -157,6 +203,8 @@ public sealed class Navigator : Widget
         {
             return;
         }
+
+        MountPage(page);
 
         Rect contentArea = area;
         if (ShowBreadcrumb && _stack.Count > 0 && area.Height > 1)
@@ -182,7 +230,6 @@ public sealed class Navigator : Widget
         _breadcrumbRow = area.Y;
         _crumbHits.Clear();
 
-        // Draw segment by segment so each title's x-range can be recorded for click-to-jump.
         surface.SetClip(area);
         int x = area.X + 1;
         var sepStyle = new Style(theme.Muted, theme.Background);
@@ -209,7 +256,6 @@ public sealed class Navigator : Widget
 
     public override bool OnEvent(InputEvent e)
     {
-        // A click on a breadcrumb segment jumps back to that level.
         if (ShowBreadcrumb && e is MouseEvent { Kind: MouseEventKind.Down } m && m.Y == _breadcrumbRow)
         {
             foreach (var (start, end, index) in _crumbHits)
@@ -222,14 +268,12 @@ public sealed class Navigator : Widget
             }
         }
 
-        // The back key pops (before the page sees it), unless we're at the root.
         if (e is KeyEvent key && key.Key == BackKey && _stack.Count > 1)
         {
             Pop();
             return true;
         }
 
-        // Otherwise route to the current page's content.
         return Current?.Content.OnEvent(e) ?? false;
     }
 }

@@ -121,7 +121,7 @@ public class AsyncContentTests
         });
 
         var s = new Surface(20, 1);
-        RenderOnce(ac, s);            // start the worker
+        RenderOnce(ac, s);
         Assert.True(started.Wait(1000));
         ac.Unmount();                 // navigate away → cancel
         release.Set();                // let the worker finish (into cancellation)

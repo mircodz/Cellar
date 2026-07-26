@@ -20,7 +20,7 @@ public readonly struct FuzzyMatch
         Indices = indices;
     }
 
-    public static FuzzyMatch NoMatch { get; } = new(false, 0, Array.Empty<int>());
+    public static FuzzyMatch NoMatch { get; } = new(false, 0, []);
 }
 
 /// <summary>
@@ -51,7 +51,7 @@ public static class FuzzyMatcher
     {
         if (string.IsNullOrEmpty(query))
         {
-            return new FuzzyMatch(true, 0, Array.Empty<int>());
+            return new FuzzyMatch(true, 0, []);
         }
 
         if (string.IsNullOrEmpty(candidate))
@@ -105,10 +105,8 @@ public static class FuzzyMatcher
                 continue;
             }
 
-            // Base reward for the match.
             int cellScore = ScoreMatch;
 
-            // Positional bonuses.
             if (ci == 0)
             {
                 cellScore += BonusFirstChar;
@@ -140,7 +138,6 @@ public static class FuzzyMatcher
             }
             else
             {
-                // Leading gap before the very first matched char.
                 cellScore -= ci * PenaltyLeadingGap;
             }
 
@@ -150,7 +147,7 @@ public static class FuzzyMatcher
             qi++;
         }
 
-        return qi >= query.Length; // matched iff the whole query was consumed
+        return qi >= query.Length;
     }
 
     private static bool IsSeparator(char c) =>

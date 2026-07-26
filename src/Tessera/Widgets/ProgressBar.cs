@@ -105,7 +105,7 @@ public sealed class ProgressBar : Widget
                 DrawLabel(surface, new Rect(area.X, area.Y, labelW, area.Height), label, labelStyle, Justify.Left);
                 barArea = new Rect(area.X + labelW, area.Y, area.Width - labelW, area.Height);
             }
-            else // Right
+            else
             {
                 DrawLabel(surface, new Rect(area.Right - labelW, area.Y, labelW, area.Height), label, labelStyle, Justify.Right);
                 barArea = new Rect(area.X, area.Y, area.Width - labelW, area.Height);
@@ -122,8 +122,8 @@ public sealed class ProgressBar : Widget
             return;
         }
 
-        var fillStyle = new Style(Color.Default, fill);           // solid filled block (space on fill bg)
-        var trackStyle = new Style(Color.Default, track);         // empty track (space on track bg)
+        var fillStyle = new Style(Color.Default, fill);
+        var trackStyle = new Style(Color.Default, track);
         // Leading edge: a left-partial block, fill in the FG over the track BG.
         double exact = value * area.Width;
         int fullCells = (int)Math.Floor(exact);
@@ -136,15 +136,15 @@ public sealed class ProgressBar : Widget
             Cell cell;
             if (i < fullCells)
             {
-                cell = Cell.Blank(fillStyle);                     // solid fill
+                cell = Cell.Blank(fillStyle);
             }
             else if (i == fullCells && eighths > 0)
             {
-                cell = Cell.FromGrapheme(LeftPartials[eighths], new Style(fill, track)); // sub-cell edge
+                cell = Cell.FromGrapheme(LeftPartials[eighths], new Style(fill, track));
             }
             else
             {
-                cell = Cell.Blank(trackStyle);                    // track
+                cell = Cell.Blank(trackStyle);
             }
 
             for (int y = area.Top; y < area.Bottom; y++)
@@ -154,7 +154,6 @@ public sealed class ProgressBar : Widget
 
     private void DrawLabel(Surface surface, Rect area, string label, Style style, Justify justify)
     {
-        // Vertically center the label within a multi-row bar.
         int y = area.Y + area.Height / 2;
         surface.SetClip(area);
         TextRenderer.DrawLine(surface, area.X, y, area.Width, new StyledText(label, style), justify);
@@ -227,10 +226,8 @@ public sealed class ProgressBar : Widget
         {
             bool dark = theme.Background.R + theme.Background.G + theme.Background.B < 384;
             int d = dark ? 24 : -24;
-            return Color.Rgb(Clamp(theme.Background.R + d), Clamp(theme.Background.G + d), Clamp(theme.Background.B + d));
+            return Color.Rgb(Color.ClampChannel(theme.Background.R + d), Color.ClampChannel(theme.Background.G + d), Color.ClampChannel(theme.Background.B + d));
         }
         return theme.Muted;
     }
-
-    private static byte Clamp(int v) => (byte)Math.Clamp(v, 0, 255);
 }

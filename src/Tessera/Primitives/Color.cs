@@ -19,7 +19,7 @@ public enum ColorDepth
 /// A color: terminal default, one of the 16 ANSI colors, or 24-bit RGB. RGB values are
 /// quantized on demand to fit a terminal's capabilities.
 /// </summary>
-public readonly struct Color : IEquatable<Color>
+public readonly partial struct Color : IEquatable<Color>
 {
     private enum Kind : byte { Default, Ansi, Rgb }
 
@@ -41,6 +41,9 @@ public readonly struct Color : IEquatable<Color>
 
     /// <summary>A 24-bit RGB color.</summary>
     public static Color Rgb(byte r, byte g, byte b) => new(Kind.Rgb, r, g, b);
+
+    /// <summary>Clamps an integer to the 0-255 color-channel range.</summary>
+    public static byte ClampChannel(int value) => (byte)Math.Clamp(value, 0, 255);
 
     /// <summary>One of the 16 standard ANSI palette colors (index 0-15).</summary>
     public static Color Ansi(int index)
@@ -64,7 +67,6 @@ public readonly struct Color : IEquatable<Color>
     /// <summary>The ANSI palette index for an <see cref="IsAnsi"/> color.</summary>
     public int AnsiIndex => _r;
 
-    // --- Named 16-color palette ---
     public static Color Black => Ansi(0);
     public static Color Red => Ansi(1);
     public static Color Green => Ansi(2);

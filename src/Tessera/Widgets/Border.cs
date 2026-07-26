@@ -53,27 +53,23 @@ public sealed class Border : Widget
         var g = Glyphs(BorderStyle);
         var lineStyle = EffectiveStyle;
 
-        // Corners.
         surface.Set(area.Left, area.Top, Cell.FromGrapheme(g.TopLeft, lineStyle));
         surface.Set(area.Right - 1, area.Top, Cell.FromGrapheme(g.TopRight, lineStyle));
         surface.Set(area.Left, area.Bottom - 1, Cell.FromGrapheme(g.BottomLeft, lineStyle));
         surface.Set(area.Right - 1, area.Bottom - 1, Cell.FromGrapheme(g.BottomRight, lineStyle));
 
-        // Horizontal edges.
         for (int x = area.Left + 1; x < area.Right - 1; x++)
         {
             surface.Set(x, area.Top, Cell.FromGrapheme(g.Horizontal, lineStyle));
             surface.Set(x, area.Bottom - 1, Cell.FromGrapheme(g.Horizontal, lineStyle));
         }
 
-        // Vertical edges.
         for (int y = area.Top + 1; y < area.Bottom - 1; y++)
         {
             surface.Set(area.Left, y, Cell.FromGrapheme(g.Vertical, lineStyle));
             surface.Set(area.Right - 1, y, Cell.FromGrapheme(g.Vertical, lineStyle));
         }
 
-        // Title, inset one cell from the left corner and truncated to fit.
         if (!string.IsNullOrEmpty(Title) && area.Width > 4)
         {
             string title = " " + Title + " ";

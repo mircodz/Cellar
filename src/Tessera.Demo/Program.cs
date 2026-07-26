@@ -195,7 +195,7 @@ internal static class Program
             Modal = true,
             ScrimOpacity = 0.4,
         };
-        palette.OnRun = () => app.RemoveOverlay(overlay);
+        palette.OnAfterRun = () => app.RemoveOverlay(overlay);
         app.PushOverlay(overlay);
     }
 }

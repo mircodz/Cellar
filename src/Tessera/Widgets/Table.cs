@@ -4,6 +4,7 @@ using System.Text;
 using Tessera.Layout;
 using Tessera.Primitives;
 using Tessera.Rendering;
+using Tessera.Text;
 
 namespace Tessera.Widgets;
 
@@ -15,17 +16,17 @@ public sealed class Column
 {
     public string Header { get; set; }
     public Constraint Width { get; set; }
-    public Alignment Alignment { get; set; }
+    public Justify Justify { get; set; }
 
     /// <summary>Maps a cell string to a comparable sort key so numeric columns sort correctly
     /// (42 before 100). Null uses ordinal string comparison. E.g. <c>SortKey = double.Parse</c>.</summary>
     public Func<string, IComparable>? SortKey { get; set; }
 
-    public Column(string header, Constraint width, Alignment alignment = Alignment.Left)
+    public Column(string header, Constraint width, Justify justify = Justify.Left)
     {
         Header = header;
         Width = width;
-        Alignment = alignment;
+        Justify = justify;
     }
 }
 
@@ -93,6 +94,17 @@ public sealed class Table : Widget
     private int _dataTop = -1;
     private int _dataViewportRows;
 
+    // The row order as first sorted, so a None state can restore it. Rows are reference types,
+    // so we keep the array of references (cheap) — not a deep copy.
+    private string[][]? _originalOrder;
+
+    private string[] _headerCells = [];
+    private int _headerSortColumn = -2;
+    private bool _headerSortDescending;
+
+    private int[] _widths = [];
+    private Constraint[] _constraints = [];
+
     /// <summary>Raised when the selected row changes, with the new selected index.</summary>
     public Action<int>? OnSelect { get; set; }
 
@@ -117,7 +129,7 @@ public sealed class Table : Widget
                 SortState.Ascending => SortState.Descending,
                 _ => SortState.None,
             }
-            : SortState.Ascending; // a new column starts ascending
+            : SortState.Ascending;
         ApplySort(column, next);
     }
 
@@ -144,7 +156,6 @@ public sealed class Table : Widget
             return;
         }
 
-        // Snapshot the insertion order the first time we sort, so None can restore it.
         CaptureOriginalOrder();
 
         var keySelector = Columns[column].SortKey;
@@ -187,10 +198,6 @@ public sealed class Table : Widget
         }
     }
 
-    // The row order as first sorted, so a None state can restore it. Rows are reference types,
-    // so we keep the array of references (cheap) — not a deep copy.
-    private string[][]? _originalOrder;
-
     private void CaptureOriginalOrder()
     {
         if (_originalOrder is not null && _originalOrder.Length == Rows.Count)
@@ -221,7 +228,7 @@ public sealed class Table : Widget
 
         foreach (var leftover in present)
         {
-            Rows.Add(leftover); // any new rows go at the end
+            Rows.Add(leftover);
         }
 
         _originalOrder = null;
@@ -241,7 +248,6 @@ public sealed class Table : Widget
         bool drawBar = ShowScrollbar && overflowing && area.Width > 1;
         int barWidth = drawBar ? 1 : 0;
 
-        // Reserve the last column for the scrollbar; columns lay out in the remaining width.
         var contentArea = new Rect(area.X, area.Y, area.Width - barWidth, area.Height);
         int[] widths = ResolveColumnWidths(contentArea.Width);
 
@@ -255,7 +261,6 @@ public sealed class Table : Widget
 
         int firstRow = Math.Max(0, ScrollOffset);
         int visibleRows = contentArea.Bottom - y;
-        // Remember where the data rows start, for mouse row hit-testing.
         _dataTop = y;
         _dataViewportRows = visibleRows;
         _dataArea = new Rect(contentArea.X, y, contentArea.Width, Math.Max(0, visibleRows));
@@ -270,13 +275,11 @@ public sealed class Table : Widget
             bool selected = rowIndex == SelectedIndex;
             bool striped = Striped && (rowIndex & 1) == 1;
             var style = selected ? EffectiveSelected : striped ? EffectiveStripe : EffectiveRow;
-            // Selection and stripe both paint a full-width background behind the row.
             DrawRow(surface, contentArea, widths, y + i, Rows[rowIndex], style, fill: selected || striped);
         }
 
         if (drawBar)
         {
-            // The scrollbar spans the data rows (below the header).
             int barTop = area.Top + (ShowHeader ? 1 : 0);
             var barRect = new Rect(area.Right - 1, barTop, 1, area.Height - (ShowHeader ? 1 : 0));
             Scrollbar.Render(surface, barRect, ScrollOffset, dataRowsVisible, Rows.Count);
@@ -323,7 +326,7 @@ public sealed class Table : Widget
         if (_headerCells.Length != n)
         {
             _headerCells = new string[n];
-            _headerSortColumn = -2; // force rebuild after a column-count change
+            _headerSortColumn = -2;
         }
 
         // The sort arrow is the only per-frame variation; rebuild the decorated strings only
@@ -341,10 +344,6 @@ public sealed class Table : Widget
         }
         return _headerCells;
     }
-
-    private string[] _headerCells = Array.Empty<string>();
-    private int _headerSortColumn = -2;
-    private bool _headerSortDescending;
 
     // Captures each header cell's screen x-range and the header row, for click hit-testing.
     private void RecordHeaderHits(Rect area, int[] widths, int y)
@@ -376,7 +375,6 @@ public sealed class Table : Widget
 
     private bool HandleClick(Terminal.MouseEvent m)
     {
-        // A click on the header row cycles the sort on the clicked column.
         if (Sortable && m.Y == _headerRow)
         {
             foreach (var (start, end, col) in _headerHits)
@@ -386,7 +384,6 @@ public sealed class Table : Widget
             return false;
         }
 
-        // A click on a data row selects it (and activates on the primary button re-click).
         if (_dataArea.Contains(m.X, m.Y))
         {
             int rowIndex = ScrollOffset + (m.Y - _dataTop);
@@ -396,7 +393,7 @@ public sealed class Table : Widget
                 SetSelection(rowIndex);
                 if (reclick)
                 {
-                    OnActivate?.Invoke(rowIndex); // click an already-selected row = activate
+                    OnActivate?.Invoke(rowIndex);
                 }
 
                 return true;
@@ -440,7 +437,6 @@ public sealed class Table : Widget
             SelectedIndex = clamped;
             OnSelect?.Invoke(SelectedIndex);
         }
-        // Keep the selection visible.
         int dataRows = _dataViewportRows > 0 ? _dataViewportRows : Rows.Count;
         if (SelectedIndex < ScrollOffset)
         {
@@ -472,9 +468,6 @@ public sealed class Table : Widget
         return _widths;
     }
 
-    private int[] _widths = Array.Empty<int>();
-    private Constraint[] _constraints = Array.Empty<Constraint>();
-
     private void DrawRow(Surface surface, Rect area, int[] widths, int y, string[] cells, Style style, bool fill)
     {
         if (y < area.Top || y >= area.Bottom)
@@ -494,20 +487,20 @@ public sealed class Table : Widget
             if (w > 0 && c < cells.Length)
             {
                 string text = cells[c] ?? string.Empty;
-                DrawClippedAligned(surface, new Rect(x, y, w, 1), text, style, Columns[c].Alignment);
+                DrawClippedAligned(surface, new Rect(x, y, w, 1), text, style, Columns[c].Justify);
             }
             x += w + ColumnSpacing;
         }
     }
 
-    private static void DrawClippedAligned(Surface surface, Rect cell, string text, Style style, Alignment align)
+    private static void DrawClippedAligned(Surface surface, Rect cell, string text, Style style, Justify align)
     {
         text = Truncate(text, cell.Width);
         int textWidth = Unicode.StringWidth(text);
         int x = align switch
         {
-            Alignment.Right => cell.X + Math.Max(0, cell.Width - textWidth),
-            Alignment.Center => cell.X + Math.Max(0, (cell.Width - textWidth) / 2),
+            Justify.Right => cell.X + Math.Max(0, cell.Width - textWidth),
+            Justify.Center => cell.X + Math.Max(0, (cell.Width - textWidth) / 2),
             _ => cell.X,
         };
         surface.SetClip(cell);

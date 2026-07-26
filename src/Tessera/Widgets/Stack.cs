@@ -239,7 +239,6 @@ public sealed class Stack : Widget
             _hasFocus = value;
             if (value)
             {
-                // Focus the first focusable child if none is focused yet.
                 if (FocusedIndex() < 0)
                 {
                     for (int i = 0; i < Children.Count; i++)

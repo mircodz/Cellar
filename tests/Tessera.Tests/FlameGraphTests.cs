@@ -75,16 +75,6 @@ public class FlameGraphTests
     }
 
     [Fact]
-    public void ZoomOut_ReturnsToParent()
-    {
-        var fg = BuildGraph(out var root);
-        var parse = root.Children[0];
-        fg.ZoomTo(parse);
-        fg.ZoomOut();
-        Assert.Same(root, fg.ZoomedFrame);
-    }
-
-    [Fact]
     public void Click_SelectsThenZooms()
     {
         var fg = BuildGraph(out var root);

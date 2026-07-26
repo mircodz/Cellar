@@ -1,14 +1,41 @@
 # Tessera
 
-<div align="center">
-    <img src="https://count.getloli.com/get/@mircodz-tessera?theme=asoul&padding=3" /><br>
-</div>
+Tessera is a retained-mode terminal UI framework for .NET 8. It provides cell-diffed ANSI
+rendering, styled text, constraint-based layouts, themes, mouse and keyboard input, and a
+collection of interactive widgets.
 
-# Introduction
+![Demo](https://github.com/user-attachments/assets/27193ea9-bfba-4a50-b022-30dcac493877)
 
-A retained-mode, cell-diffing TUI framework for .NET. Tessera renders rich terminal user
-interfaces with a compositor that emits only the minimal ANSI needed each frame, a typed
-styled-text engine, semantic themes, a constraint-based layout system, and a broad,
-polished widget set.
+## Install
 
-<img width="1912" height="1163" alt="Screenshot 2026-07-16 at 18 46 36" src="https://github.com/user-attachments/assets/27193ea9-bfba-4a50-b022-30dcac493877" />
+```sh
+dotnet add package Tessera
+```
+
+## Quick start
+
+```csharp
+using Tessera.Layout;
+using Tessera.Terminal;
+using Tessera.Widgets;
+
+using var terminal = new AnsiTerminal();
+using var app = new App(terminal);
+
+app.Root = new Stack(Direction.Vertical)
+    .Add(new Panel(new Label("Hello, Tessera!"), " Welcome "), Constraint.Fill())
+    .Add(new Label("Press q to quit"), Constraint.Length(1));
+
+app.OnEvent = input =>
+{
+    if (input is KeyEvent { IsChar: true } key && key.Rune.Value == 'q')
+    {
+        app.Quit();
+        return true;
+    }
+
+    return false;
+};
+
+await app.RunAsync();
+```

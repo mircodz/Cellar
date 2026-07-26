@@ -82,36 +82,28 @@ public sealed class AsyncContent : Widget, IDisposable
     /// <summary>True once the factory has produced a widget (or an error widget) and it is live.</summary>
     public bool IsLoaded => _loaded is not null;
 
-    // ---- Lifecycle ----
-
     protected override void OnMount(App app)
     {
         _mountedApp = app;
-        // Mount the placeholder so a self-animating spinner starts; the real child is mounted when
-        // it is published (see Publish).
+        // The loaded child is mounted later by Publish.
         _placeholder.Mount(app);
     }
 
     protected override void OnUnmount()
     {
-        // Navigating away / app teardown: cancel the background work so a cooperative factory stops.
         _cts.Cancel();
         _mountedApp = null;
     }
 
     protected override void VisitChildren(Action<Widget> visit)
     {
-        // Propagate lifecycle to whatever is current. During the initial mount pass _loaded is null,
-        // so only the placeholder is visited (also handled directly in OnMount); at unmount this
-        // reaches the loaded child if one exists.
+        // Initial mounting is explicit above; traversal reaches the loaded child during teardown.
         var loaded = _loaded;
         if (loaded is not null)
         {
             visit(loaded);
         }
     }
-
-    // ---- Rendering / measuring / input all delegate to the current widget ----
 
     public override Size Measure(Size available) => Current.Measure(available);
 
@@ -143,12 +135,11 @@ public sealed class AsyncContent : Widget, IDisposable
 
     public override bool IsFocusable => _loaded?.IsFocusable ?? false;
 
-    // Kicks off the background factory exactly once, on the first render (when actually visible).
     private void EnsureStarted()
     {
         if (Interlocked.CompareExchange(ref _started, 1, 0) != 0)
         {
-            return; // already started (guards re-entrant/repeat renders)
+            return;
         }
 
         var token = _cts.Token;
@@ -175,12 +166,11 @@ public sealed class AsyncContent : Widget, IDisposable
         Publish(produced);
     }
 
-    // The single handoff: check cancellation, then write the reference once and request one repaint.
     private void Publish(Widget widget)
     {
         if (_cts.IsCancellationRequested)
         {
-            return; // a late completer that lost the race to cancellation stays silent
+            return;
         }
 
         // Mount the produced child so its own lifecycle (e.g. a nested AsyncContent/Spinner) runs.

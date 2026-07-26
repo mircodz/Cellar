@@ -41,7 +41,6 @@ public sealed class Theme
     public required Color Error { get; init; }
     public required Color Info { get; init; }
 
-    // --- Convenience styles built from the roles ---
     // Backgrounds are left as Color.Default ("inherit"); the compositor's DefaultBackground
     // substitutes a concrete color at emit time (or leaves it transparent when unset).
 
@@ -63,15 +62,11 @@ public sealed class Theme
                 // Lift toward the foreground by ~8% for dark themes, or darken for light.
                 bool dark = Background.R + Background.G + Background.B < 384;
                 int d = dark ? 14 : -14;
-                return Color.Rgb(Clamp(Background.R + d), Clamp(Background.G + d), Clamp(Background.B + d));
+                return Color.Rgb(Color.ClampChannel(Background.R + d), Color.ClampChannel(Background.G + d), Color.ClampChannel(Background.B + d));
             }
             return Background;
         }
     }
-
-    private static byte Clamp(int v) => (byte)Math.Clamp(v, 0, 255);
-
-    // --- Ambient current theme (thread-safe, defaults to dark) ---
 
     private static Theme _current = BuiltIn.Base16Dark;
 

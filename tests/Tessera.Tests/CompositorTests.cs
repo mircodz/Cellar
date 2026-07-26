@@ -34,6 +34,18 @@ public class SurfaceTests
     }
 
     [Fact]
+    public void OverwritingWideContinuation_ClearsLeftHalf()
+    {
+        var s = new Surface(4, 1);
+        s.DrawText(0, 0, "あ", Style.Default);
+
+        s.Set(1, 0, Cell.FromGrapheme("x", Style.Default));
+
+        Assert.Equal(" ", s.Get(0, 0).Grapheme);
+        Assert.Equal("x", s.Get(1, 0).Grapheme);
+    }
+
+    [Fact]
     public void Clip_DiscardsOutOfBoundsWrites()
     {
         var s = new Surface(5, 5);

@@ -196,7 +196,7 @@ public static class TextRenderer
             {
                 int add = perGap + (remainder-- > 0 ? 1 : 0);
                 drawX = surface.DrawText(drawX, y, span.Text, span.Style);
-                drawX += add; // widen the gap
+                drawX += add;
             }
             else
             {
@@ -213,7 +213,7 @@ public static class TextRenderer
             return;
         }
 
-        int budget = width - 1; // reserve one column for the ellipsis
+        int budget = width - 1;
         int cx = x;
         int used = 0;
         Style lastStyle = Style.Default;
@@ -259,7 +259,6 @@ public static class TextRenderer
         surface.DrawText(cx, y, "…", lastStyle);
     }
 
-    // Splits text into word / whitespace tokens, preserving each.
     private static IEnumerable<(string token, bool isSpace)> Tokenize(string text)
     {
         int i = 0;
@@ -276,7 +275,6 @@ public static class TextRenderer
         }
     }
 
-    // Splits an over-long word into width-sized grapheme chunks.
     private static IEnumerable<string> HardSplit(string word, int width, int startWidth)
     {
         var sb = new System.Text.StringBuilder();

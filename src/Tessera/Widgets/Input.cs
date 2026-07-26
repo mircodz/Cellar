@@ -17,8 +17,8 @@ namespace Tessera.Widgets;
 public sealed class Input : Widget
 {
     private readonly List<Rune> _runes = new();
-    private int _cursor;      // caret index in [0, _runes.Count]
-    private int _scroll;      // first visible rune index
+    private int _cursor;
+    private int _scroll;
 
     /// <summary>Text shown dimmed when the field is empty.</summary>
     public string Placeholder { get; set; } = string.Empty;
@@ -87,7 +87,6 @@ public sealed class Input : Widget
         EnsureCursorVisible(width);
 
         var style = TextStyle ?? theme.TextStyle;
-        // Draw the visible slice of runes starting at _scroll.
         int x = area.X;
         int col = 0;
         for (int i = _scroll; i < _runes.Count && col < width; i++)
@@ -104,7 +103,6 @@ public sealed class Input : Widget
             col += w;
         }
 
-        // Draw the caret as a reversed cell at the cursor's visible column (when focused).
         if (HasFocus)
         {
             int caretCol = VisibleColumn(_cursor) - VisibleColumn(_scroll);
@@ -189,7 +187,6 @@ public sealed class Input : Widget
     {
         if (_cursor < _scroll) { _scroll = _cursor; return; }
 
-        // Widen the scroll window until the caret column fits within the field.
         while (VisibleColumn(_cursor) - VisibleColumn(_scroll) >= width && _scroll < _cursor)
         {
             _scroll++;

@@ -13,6 +13,15 @@ namespace Tessera.Rendering;
 /// </summary>
 public sealed class SvgRenderer
 {
+    // Standard xterm 16-color palette, for resolving ANSI colors to concrete RGB.
+    private static readonly Color[] Ansi16 =
+    {
+        Color.Rgb(0, 0, 0),       Color.Rgb(205, 0, 0),     Color.Rgb(0, 205, 0),     Color.Rgb(205, 205, 0),
+        Color.Rgb(0, 0, 238),     Color.Rgb(205, 0, 205),   Color.Rgb(0, 205, 205),   Color.Rgb(229, 229, 229),
+        Color.Rgb(127, 127, 127), Color.Rgb(255, 0, 0),     Color.Rgb(0, 255, 0),     Color.Rgb(255, 255, 0),
+        Color.Rgb(92, 92, 255),   Color.Rgb(255, 0, 255),   Color.Rgb(0, 255, 255),   Color.Rgb(255, 255, 255),
+    };
+
     /// <summary>Cell width in pixels.</summary>
     public int CellWidth { get; set; } = 9;
 
@@ -46,11 +55,9 @@ public sealed class SvgRenderer
           .Append("\" height=\"").Append(pxH)
           .Append("\" viewBox=\"0 0 ").Append(pxW).Append(' ').Append(pxH).Append("\">\n");
 
-        // Full-canvas background (includes the padding margin).
         sb.Append("<rect width=\"").Append(pxW).Append("\" height=\"").Append(pxH)
           .Append("\" fill=\"").Append(Hex(DefaultBackground)).Append("\"/>\n");
 
-        // Everything below is drawn inside a padding-translated group.
         sb.Append("<g transform=\"translate(").Append(pad).Append(',').Append(pad).Append(")\">\n");
 
         // Per-row background rects: coalesce horizontal runs of the same background color.
@@ -65,7 +72,6 @@ public sealed class SvgRenderer
                 {
                     x++;
                 }
-                // Skip the canvas-default background (already painted).
                 if (!ColorEq(bg, DefaultBackground))
                 {
                     AppendRect(sb, start, y, x - start, bg);
@@ -113,7 +119,7 @@ public sealed class SvgRenderer
                 AppendGlyph(sb, x, y, cell.Grapheme, cell.Style, cell.Width == 2 ? 2 : 1);
             }
         }
-        sb.Append("</g>\n</g>\n</svg>\n"); // close the font group and the padding group
+        sb.Append("</g>\n</g>\n</svg>\n");
         return sb.ToString();
     }
 
@@ -215,13 +221,4 @@ public sealed class SvgRenderer
         }
         return sb.ToString();
     }
-
-    // Standard xterm 16-color palette, for resolving ANSI colors to concrete RGB.
-    private static readonly Color[] Ansi16 =
-    {
-        Color.Rgb(0, 0, 0),       Color.Rgb(205, 0, 0),     Color.Rgb(0, 205, 0),     Color.Rgb(205, 205, 0),
-        Color.Rgb(0, 0, 238),     Color.Rgb(205, 0, 205),   Color.Rgb(0, 205, 205),   Color.Rgb(229, 229, 229),
-        Color.Rgb(127, 127, 127), Color.Rgb(255, 0, 0),     Color.Rgb(0, 255, 0),     Color.Rgb(255, 255, 0),
-        Color.Rgb(92, 92, 255),   Color.Rgb(255, 0, 255),   Color.Rgb(0, 255, 255),   Color.Rgb(255, 255, 255),
-    };
 }

@@ -7,8 +7,8 @@ using Tessera.Theming;
 namespace Tessera.Widgets;
 
 /// <summary>
-/// A horizontal divider line, optionally with a centered or left-aligned label. Handy for
-/// visually separating sections. Defaults its color to the ambient theme's border/muted.
+/// A horizontal divider line with an optional centered or left-aligned label.
+/// Defaults its color to the ambient theme's border/muted.
 /// </summary>
 public sealed class Rule : Widget
 {
@@ -36,7 +36,6 @@ public sealed class Rule : Widget
                  : LineStyle == BorderStyle.Double ? "═" : "─";
         var lineStyle = EffectiveStyle;
 
-        // Draw the full rule line first.
         for (int x = area.Left; x < area.Right; x++)
         {
             surface.Set(x, y, Cell.FromGrapheme(h, lineStyle));
@@ -53,8 +52,7 @@ public sealed class Rule : Widget
             return;
         }
 
-        // Carve out a padded slot for the label and draw it over the line.
-        int slotWidth = labelWidth + 2; // one space padding each side
+        int slotWidth = labelWidth + 2;
         int startX = LabelPosition switch
         {
             Justify.Left => area.Left + 2,

@@ -81,7 +81,6 @@ public sealed class Sparkline : Widget
         int width = area.Width;
         int height = area.Height;
 
-        // Show the most recent `width` samples, right-aligned.
         int start = Math.Max(0, _values.Count - width);
         int count = _values.Count - start;
 
@@ -104,10 +103,10 @@ public sealed class Sparkline : Widget
         // Each column is a vertical bar `height` cells tall with 8 sub-levels per cell,
         // giving height*8 total resolution. Bars grow upward from the bottom row.
         int levels = height * 8;
-        int drawX = area.X + (width - count); // right-align
+        int drawX = area.X + (width - count);
         for (int i = start; i < _values.Count; i++)
         {
-            double norm = (_values[i] - min) / range;          // 0..1
+            double norm = (_values[i] - min) / range;
             int filled = (int)Math.Round(norm * levels);
             filled = Math.Clamp(filled, 0, levels);
             DrawColumn(surface, drawX++, area.Top, height, filled, style);
@@ -120,12 +119,11 @@ public sealed class Sparkline : Widget
     {
         for (int row = 0; row < height; row++)
         {
-            // Row 0 is the top; fill accumulates from the bottom, so invert.
             int y = top + (height - 1 - row);
             int cellLevel = Math.Clamp(filled - row * 8, 0, 8);
             if (cellLevel == 0)
             {
-                continue; // leave blank
+                continue;
             }
 
             surface.Set(x, y, Cell.FromGrapheme(Bars[cellLevel], style));

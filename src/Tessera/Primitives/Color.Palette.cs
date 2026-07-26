@@ -5,9 +5,46 @@ using System.Linq;
 
 namespace Tessera.Primitives;
 
-/// <summary>Hex/HSL/named-palette construction and interpolation helpers for <see cref="Color"/>.</summary>
-public static class Colors
+/// <summary>Hex, HSL, named-color, and interpolation helpers.</summary>
+public readonly partial struct Color
 {
+    private static readonly Dictionary<string, Color> Named =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["black"] = Color.Rgb(0, 0, 0),
+            ["white"] = Color.Rgb(255, 255, 255),
+            ["red"] = Color.Rgb(255, 0, 0),
+            ["green"] = Color.Rgb(0, 128, 0),
+            ["lime"] = Color.Rgb(0, 255, 0),
+            ["blue"] = Color.Rgb(0, 0, 255),
+            ["yellow"] = Color.Rgb(255, 255, 0),
+            ["cyan"] = Color.Rgb(0, 255, 255),
+            ["magenta"] = Color.Rgb(255, 0, 255),
+            ["gray"] = Color.Rgb(128, 128, 128),
+            ["grey"] = Color.Rgb(128, 128, 128),
+            ["silver"] = Color.Rgb(192, 192, 192),
+            ["maroon"] = Color.Rgb(128, 0, 0),
+            ["olive"] = Color.Rgb(128, 128, 0),
+            ["teal"] = Color.Rgb(0, 128, 128),
+            ["navy"] = Color.Rgb(0, 0, 128),
+            ["purple"] = Color.Rgb(128, 0, 128),
+            ["orange"] = Color.Rgb(255, 165, 0),
+            ["pink"] = Color.Rgb(255, 192, 203),
+            ["gold"] = Color.Rgb(255, 215, 0),
+            ["coral"] = Color.Rgb(255, 127, 80),
+            ["salmon"] = Color.Rgb(250, 128, 114),
+            ["turquoise"] = Color.Rgb(64, 224, 208),
+            ["violet"] = Color.Rgb(238, 130, 238),
+            ["indigo"] = Color.Rgb(75, 0, 130),
+            ["crimson"] = Color.Rgb(220, 20, 60),
+            ["skyblue"] = Color.Rgb(135, 206, 235),
+            ["slateblue"] = Color.Rgb(106, 90, 205),
+            ["seagreen"] = Color.Rgb(46, 139, 87),
+            ["forestgreen"] = Color.Rgb(34, 139, 34),
+            ["tomato"] = Color.Rgb(255, 99, 71),
+            ["steelblue"] = Color.Rgb(70, 130, 180),
+        };
+
     /// <summary>Parses <c>#rgb</c>/<c>#rrggbb</c> (with or without '#'); throws on bad input.</summary>
     public static Color Hex(string hex)
     {
@@ -105,7 +142,7 @@ public static class Colors
     {
         if (steps <= 0)
         {
-            return Array.Empty<Color>();
+            return [];
         }
 
         if (stops.Length == 0)
@@ -149,41 +186,4 @@ public static class Colors
 
     private static bool TryByte(ReadOnlySpan<char> s, out byte value)
         => byte.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
-
-    private static readonly Dictionary<string, Color> Named =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["black"] = Color.Rgb(0, 0, 0),
-            ["white"] = Color.Rgb(255, 255, 255),
-            ["red"] = Color.Rgb(255, 0, 0),
-            ["green"] = Color.Rgb(0, 128, 0),
-            ["lime"] = Color.Rgb(0, 255, 0),
-            ["blue"] = Color.Rgb(0, 0, 255),
-            ["yellow"] = Color.Rgb(255, 255, 0),
-            ["cyan"] = Color.Rgb(0, 255, 255),
-            ["magenta"] = Color.Rgb(255, 0, 255),
-            ["gray"] = Color.Rgb(128, 128, 128),
-            ["grey"] = Color.Rgb(128, 128, 128),
-            ["silver"] = Color.Rgb(192, 192, 192),
-            ["maroon"] = Color.Rgb(128, 0, 0),
-            ["olive"] = Color.Rgb(128, 128, 0),
-            ["teal"] = Color.Rgb(0, 128, 128),
-            ["navy"] = Color.Rgb(0, 0, 128),
-            ["purple"] = Color.Rgb(128, 0, 128),
-            ["orange"] = Color.Rgb(255, 165, 0),
-            ["pink"] = Color.Rgb(255, 192, 203),
-            ["gold"] = Color.Rgb(255, 215, 0),
-            ["coral"] = Color.Rgb(255, 127, 80),
-            ["salmon"] = Color.Rgb(250, 128, 114),
-            ["turquoise"] = Color.Rgb(64, 224, 208),
-            ["violet"] = Color.Rgb(238, 130, 238),
-            ["indigo"] = Color.Rgb(75, 0, 130),
-            ["crimson"] = Color.Rgb(220, 20, 60),
-            ["skyblue"] = Color.Rgb(135, 206, 235),
-            ["slateblue"] = Color.Rgb(106, 90, 205),
-            ["seagreen"] = Color.Rgb(46, 139, 87),
-            ["forestgreen"] = Color.Rgb(34, 139, 34),
-            ["tomato"] = Color.Rgb(255, 99, 71),
-            ["steelblue"] = Color.Rgb(70, 130, 180),
-        };
 }

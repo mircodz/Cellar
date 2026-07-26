@@ -99,18 +99,13 @@ public sealed class Tabs : Widget
 
     public override bool IsFocusable => true;
 
-    // ---- Lifecycle: mount each tab's content once it materializes; unmount all on teardown ----
-
     protected override void OnMount(App app) => _app = app;
 
     protected override void OnUnmount() => _app = null;
 
     protected override void VisitChildren(Action<Widget> visit)
     {
-        // Visit only content that has actually been mounted. Tab content is mounted lazily by
-        // EnsureMounted the first time a tab is shown (so this is empty during the initial Mount
-        // pass — EnsureMounted, not base recursion, is the sole mounter — and covers every live
-        // tab during the Unmount pass at teardown).
+        // EnsureMounted is the sole mounter; only those tabs participate in teardown.
         for (int i = 0; i < Items.Count; i++)
         {
             if (Items[i].Mounted)
@@ -120,8 +115,6 @@ public sealed class Tabs : Widget
         }
     }
 
-    // Mounts a tab's content the first time it becomes live (on materialization/first show), so an
-    // AsyncContent inside a lazy tab starts its lifecycle exactly when the tab is first rendered.
     private void EnsureMounted(Tab tab)
     {
         if (_app is { } app && !tab.Mounted)
@@ -171,7 +164,6 @@ public sealed class Tabs : Widget
         }
     }
 
-    // --- Bar renderer (tmux-style), kept separate so it could move behind ITabsRenderer. ---
     private void RenderBar(Surface surface, Rect area)
     {
         _hitRects.Clear();
@@ -184,7 +176,6 @@ public sealed class Tabs : Widget
         for (int i = 0; i < Items.Count && x < area.Right; i++)
         {
             bool isActive = i == _active;
-            // tmux-style label: " index:title " with the active one on an accent field.
             string label = $" {i + 1}:{Items[i].Title} ";
             var style = isActive ? active : inactive;
 
@@ -193,7 +184,6 @@ public sealed class Tabs : Widget
             _hitRects.Add((start, drawn, i));
             x = drawn;
 
-            // A subtle separator between segments.
             if (i < Items.Count - 1 && x < area.Right)
             {
                 surface.Set(x, area.Y, Cell.FromGrapheme("│", theme.BorderStyle));
@@ -201,7 +191,6 @@ public sealed class Tabs : Widget
             }
         }
 
-        // Fill the rest of the bar row so it reads as one continuous strip.
         for (int fx = x; fx < area.Right; fx++)
         {
             surface.Set(fx, area.Y, Cell.Blank(theme.TextStyle));
@@ -216,7 +205,6 @@ public sealed class Tabs : Widget
                 return HandleClick(click);
 
             case MouseEvent mouse:
-                // Wheel/move/drag go straight to the active content (e.g. ScrollView).
                 return Active?.Content.OnEvent(mouse) ?? false;
 
             case KeyEvent key:
@@ -244,7 +232,6 @@ public sealed class Tabs : Widget
                 ActiveIndex = (_active - 1 + Items.Count) % Math.Max(1, Items.Count);
                 return true;
         }
-        // Number keys 1-9 jump directly to a tab.
         if (key.IsChar && key.Rune.Value is >= '1' and <= '9')
         {
             int idx = key.Rune.Value - '1';

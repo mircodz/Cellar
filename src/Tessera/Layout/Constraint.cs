@@ -16,6 +16,7 @@ public enum Direction
 /// </summary>
 public readonly struct Constraint
 {
+    /// <summary>Which kind of sizing rule this constraint is.</summary>
     public enum Kind { Length, Percentage, Ratio, Min, Max, Fill }
 
     public Kind Type { get; }

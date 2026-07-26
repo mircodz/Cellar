@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Tessera.Layout;
 using Tessera.Primitives;
 using Tessera.Rendering;
@@ -19,20 +20,19 @@ public sealed class Command
     public string? Subtitle { get; set; }
 
     /// <summary>Invoked when the command is chosen.</summary>
-    public Action Action { get; set; }
+    public Action OnRun { get; set; }
 
-    public Command(string title, Action action, string? subtitle = null)
+    public Command(string title, Action onRun, string? subtitle = null)
     {
         Title = title;
-        Action = action;
+        OnRun = onRun;
         Subtitle = subtitle;
     }
 }
 
 /// <summary>
-/// A fuzzy-filtered command list with a query box (Ctrl+P / Cmd+K). Type to filter via
-/// <see cref="FuzzyMatcher"/>, ↑/↓ to move, Enter to run. A pure widget — drop it into an
-/// <see cref="Overlay"/> for the full palette; it manages its own query, filtering, and selection.
+/// A fuzzy-filtered command list with keyboard and mouse selection. Use it inside an
+/// <see cref="Overlay"/> for a modal palette.
 /// </summary>
 public sealed class CommandPalette : Widget
 {
@@ -49,7 +49,7 @@ public sealed class CommandPalette : Widget
     private readonly record struct Scored(Command Command, int Score);
 
     /// <summary>Invoked after a command's action runs (e.g. to dismiss the hosting overlay).</summary>
-    public Action? OnRun { get; set; }
+    public Action? OnAfterRun { get; set; }
 
     /// <summary>Invoked when the user cancels via Enter on an empty list, etc. (optional).</summary>
     public Action? OnCancel { get; set; }
@@ -67,9 +67,9 @@ public sealed class CommandPalette : Widget
         Refilter();
     }
 
-    public CommandPalette Add(string title, Action action, string? subtitle = null)
+    public CommandPalette Add(string title, Action onRun, string? subtitle = null)
     {
-        _commands.Add(new Command(title, action, subtitle));
+        _commands.Add(new Command(title, onRun, subtitle));
         Refilter();
         return this;
     }
@@ -87,14 +87,11 @@ public sealed class CommandPalette : Widget
         string q = _input.Text;
         foreach (var cmd in _commands)
         {
-            // Zero-alloc scoring pass over all commands; matched indices are computed later,
-            // only for the handful of rows actually rendered.
             if (FuzzyMatcher.Score(q, cmd.Title, out int score))
             {
                 results.Add(new Scored(cmd, score));
             }
         }
-        // Highest score first; stable by original order for ties.
         results.Sort((a, b) => b.Score.CompareTo(a.Score));
         _filtered = results;
         _selected = 0;
@@ -110,14 +107,12 @@ public sealed class CommandPalette : Widget
 
         var theme = Theme.Current;
 
-        // Frame the palette in a themed panel; the query box sits on the first inner row,
-        // a divider below it, then the results list fills the rest.
         var bg = theme.Background;
         var panel = new Panel(null, null)
         {
             BorderStyle = BorderStyle.Rounded,
             Background = bg,
-            BorderColor = new Style(theme.Border, bg),
+            BorderLineStyle = new Style(theme.Border, bg),
         };
         panel.Render(surface, area);
 
@@ -133,8 +128,6 @@ public sealed class CommandPalette : Widget
         var dividerRow = rows[1];
         var listRow = rows[2];
 
-        // Query box: a prompt glyph + the input. All styled on the panel background so the
-        // cells don't fall back to the terminal's default background.
         surface.DrawText(queryRow.X, queryRow.Y, "❯ ", new Style(theme.Accent, bg));
         _input.HasFocus = HasFocus;
         _input.TextStyle = new Style(theme.Foreground, bg);
@@ -172,14 +165,11 @@ public sealed class CommandPalette : Widget
             bool selected = index == _selected;
             _rowHits.Add((y, index));
 
-            // Non-selected rows sit on the panel background; selected rows on the accent.
             var rowStyle = selected ? theme.SelectionStyle : new Style(theme.Foreground, bg);
             surface.FillRect(new Rect(area.X, y, area.Width, 1), rowStyle);
 
-            // Compute matched indices for THIS visible row only, into the reused buffer.
             FuzzyMatcher.MatchInto(_input.Text, scored.Command.Title, _matchBuffer, out _);
 
-            // Build the title with matched characters emphasized.
             var title = HighlightMatch(scored.Command.Title, _matchBuffer,
                 baseStyle: rowStyle,
                 matchColor: selected ? theme.SelectionForeground : theme.Accent,
@@ -189,7 +179,6 @@ public sealed class CommandPalette : Widget
             surface.SetClip(new Rect(x, y, area.Width - 1, 1));
             TextRenderer.DrawLine(surface, x, y, area.Width - 1, title, Justify.Left);
 
-            // Subtitle right-aligned and dimmed.
             if (!string.IsNullOrEmpty(scored.Command.Subtitle))
             {
                 var subStyle = selected ? rowStyle : new Style(theme.Muted, bg);
@@ -200,24 +189,28 @@ public sealed class CommandPalette : Widget
         }
     }
 
-    // Emits the title as styled text with the matched indices recolored/bolded.
     private static StyledText HighlightMatch(string title, IReadOnlyList<int> indices,
         Style baseStyle, Color matchColor, bool bold)
     {
         var result = StyledText.Empty();
         int mi = 0;
-        for (int i = 0; i < title.Length; i++)
+        var elements = StringInfo.GetTextElementEnumerator(title);
+        while (elements.MoveNext())
         {
-            bool isMatch = mi < indices.Count && indices[mi] == i;
-            if (isMatch)
+            string element = elements.GetTextElement();
+            int start = elements.ElementIndex;
+            int end = start + element.Length;
+            bool isMatch = false;
+            while (mi < indices.Count && indices[mi] < end)
             {
+                isMatch |= indices[mi] >= start;
                 mi++;
             }
 
             var style = isMatch
                 ? baseStyle.WithForeground(matchColor).AddAttributes(bold ? TextAttributes.Bold : TextAttributes.None)
                 : baseStyle;
-            result.Append(title[i].ToString(), style);
+            result.Append(element, style);
         }
         return result;
     }
@@ -229,7 +222,6 @@ public sealed class CommandPalette : Widget
             return false;
         }
 
-        // Mouse: hovering a row selects it; clicking a row runs it.
         if (e is MouseEvent m)
         {
             for (int i = 0; i < _rowHits.Count; i++)
@@ -268,8 +260,7 @@ public sealed class CommandPalette : Widget
                 return true;
         }
 
-        // Everything else (typing, backspace, cursor) drives the query box.
-        _input.HasFocus = true; // the query box is always the focus target within the palette
+        _input.HasFocus = true;
         bool used = _input.OnEvent(key);
         return used;
     }
@@ -278,8 +269,8 @@ public sealed class CommandPalette : Widget
     {
         var cmd = Selected;
         if (cmd is null) { OnCancel?.Invoke(); return; }
-        cmd.Action();
-        OnRun?.Invoke();
+        cmd.OnRun();
+        OnAfterRun?.Invoke();
     }
 
     private void Move(int delta)

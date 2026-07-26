@@ -5,9 +5,6 @@ using Tessera.Text;
 
 namespace Tessera.Widgets;
 
-/// <summary>Horizontal alignment for text within a region.</summary>
-public enum Alignment { Left, Center, Right }
-
 /// <summary>
 /// A text label over the styled-text engine: justifies a <see cref="StyledText"/> and
 /// optionally word-wraps to fill its region. Non-wrapped labels support clickable/hoverable
@@ -29,17 +26,8 @@ public sealed class Label : Widget
     }
 
     /// <summary>Convenience for a single-style label from a plain string.</summary>
-    public static Label Plain(string text, Style style, Alignment alignment = Alignment.Left)
-    {
-        var justify = alignment switch
-        {
-            Alignment.Center => Justify.Center,
-            Alignment.Right => Justify.Right,
-            _ => Justify.Left,
-        };
-
-        return new Label(new StyledText(text, style), justify);
-    }
+    public static Label Plain(string text, Style style, Justify justify = Justify.Left)
+        => new(new StyledText(text, style), justify);
 
     public override void Render(Surface surface, Rect area)
     {

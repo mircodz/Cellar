@@ -6,7 +6,7 @@ namespace Tessera.Demo;
 
 /// <summary>
 /// A demo-only widget that paints a smooth horizontal gradient across its width using the
-/// framework's <see cref="Colors.Gradient"/> helper — shows off truecolor interpolation.
+/// framework's <see cref="Color.Gradient"/> helper — shows off truecolor interpolation.
 /// </summary>
 internal sealed class GradientBar : Widget
 {
@@ -26,7 +26,7 @@ internal sealed class GradientBar : Widget
             return;
         }
 
-        var ramp = Colors.Gradient(area.Width, _stops);
+        var ramp = Color.Gradient(area.Width, _stops);
         for (int i = 0; i < area.Width; i++)
         {
             var style = new Style(ramp[i], Color.Default);

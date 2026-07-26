@@ -59,7 +59,7 @@ public sealed class Scrollbar
 
             if (upper && lower)
             {
-                surface.Set(bar.X, bar.Y + row, Cell.Blank(thumbFull));       // solid thumb
+                surface.Set(bar.X, bar.Y + row, Cell.Blank(thumbFull));
             }
             else if (upper)
             {
@@ -71,7 +71,7 @@ public sealed class Scrollbar
             }
             else
             {
-                surface.Set(bar.X, bar.Y + row, Cell.Blank(trackStyle));      // empty track
+                surface.Set(bar.X, bar.Y + row, Cell.Blank(trackStyle));
             }
         }
     }
@@ -83,10 +83,8 @@ public sealed class Scrollbar
         {
             bool dark = theme.Background.R + theme.Background.G + theme.Background.B < 384;
             int d = dark ? -6 : 20; // slightly darker on dark themes, lighter on light
-            return Color.Rgb(Clamp(theme.Background.R + d), Clamp(theme.Background.G + d), Clamp(theme.Background.B + d));
+            return Color.Rgb(Color.ClampChannel(theme.Background.R + d), Color.ClampChannel(theme.Background.G + d), Color.ClampChannel(theme.Background.B + d));
         }
         return Color.Black;
     }
-
-    private static byte Clamp(int v) => (byte)Math.Clamp(v, 0, 255);
 }

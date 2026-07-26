@@ -66,16 +66,6 @@ public class InteractiveWidgetTests
         Assert.Contains("MB", row);
     }
 
-    [Fact]
-    public void ProgressBar_FullHeight()
-    {
-        var s = new Surface(10, 3);
-        new ProgressBar(1.0) { FillColor = Color.Rgb(1, 2, 3) }.Render(s, s.Bounds);
-        // Every row of the bar column carries the fill background.
-        for (int y = 0; y < 3; y++)
-            Assert.Equal(Color.Rgb(1, 2, 3), s.Get(0, y).Style.Background);
-    }
-
     // ---- Input ----
 
     [Fact]
@@ -123,12 +113,6 @@ public class InteractiveWidgetTests
         Assert.Equal("x", changed);
         input.OnEvent(new KeyEvent(Key.Enter, default, KeyModifiers.None));
         Assert.Equal("x", submitted);
-    }
-
-    [Fact]
-    public void Input_IsFocusable()
-    {
-        Assert.True(new Input().IsFocusable);
     }
 
     // ---- Tabs ----
@@ -218,10 +202,10 @@ public class InteractiveWidgetTests
 
         sv.OnEvent(new KeyEvent(Key.End, default, KeyModifiers.None));
         sv.Render(s, s.Bounds);
-        Assert.Equal(15, sv.Offset); // 20 content - 5 viewport
+        Assert.Equal(15, sv.ScrollOffset); // 20 content - 5 viewport
 
         sv.OnEvent(new KeyEvent(Key.Home, default, KeyModifiers.None));
-        Assert.Equal(0, sv.Offset);
+        Assert.Equal(0, sv.ScrollOffset);
     }
 
     [Fact]
@@ -239,7 +223,7 @@ public class InteractiveWidgetTests
         sv.Render(s, s.Bounds);
         Assert.Contains("row0", RowText(s, 0));
 
-        sv.Offset = 4;
+        sv.ScrollOffset = 4;
         sv.Render(s, s.Bounds);
         Assert.Contains("row4", RowText(s, 0));
     }

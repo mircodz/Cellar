@@ -45,7 +45,6 @@ public sealed class BarChart : Widget
             max = 1;
         }
 
-        // Value text like " 42.0" reserved on the right.
         int valueW = 7;
         int barW = Math.Max(0, area.Width - labelW - valueW - 2);
 
@@ -55,17 +54,14 @@ public sealed class BarChart : Widget
             int y = area.Y + i;
             var (label, value) = Values[i];
 
-            // Label (left, muted, truncated).
             var labelText = new StyledText(label, theme.MutedStyle);
             TextRenderer.DrawLine(surface, area.X, y, labelW, labelText, Justify.Left);
 
-            // Bar.
             var barColor = i < BarColors.Count ? BarColors[i] : theme.Accent;
             var barStyle = new Style(barColor, Color.Default);
             int barX = area.X + labelW + 1;
             DrawBar(surface, barX, y, barW, value / max, barStyle);
 
-            // Value (right).
             string valueStr = value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
             var valueText = new StyledText(valueStr, theme.TextStyle);
             TextRenderer.DrawLine(surface, area.X + labelW + 1 + barW + 1, y, valueW, valueText, Justify.Right);

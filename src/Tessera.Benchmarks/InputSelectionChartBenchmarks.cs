@@ -106,7 +106,7 @@ public class ChartBenchmarks
             s.Add(i, Math.Sin(i * 0.1) * Math.Cos(i * 0.03));
         }
 
-        _line.SeriesList.Add(s);
+        _line.Series.Add(s);
 
         _spark = new Sparkline();
         for (int i = 0; i < 200; i++)

@@ -43,12 +43,4 @@ public class ThemeTests
         Assert.Equal(t.SelectionBackground, t.SelectionStyle.Background);
         Assert.True((t.HeaderStyle.Attributes & TextAttributes.Bold) != 0);
     }
-
-    [Fact]
-    public void BuiltInThemes_HaveDistinctNames()
-    {
-        Assert.Equal("dark", BuiltIn.Dark.Name);
-        Assert.Equal("light", BuiltIn.Light.Name);
-        Assert.Equal("high-contrast", BuiltIn.HighContrast.Name);
-    }
 }

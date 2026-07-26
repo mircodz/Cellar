@@ -21,7 +21,7 @@ public sealed class Heatmap : Widget
             for (int d = 0; d < days; d++)
             {
                 double t = Math.Clamp(Values[w, d], 0, 1);
-                var c = Tessera.Primitives.Colors.Lerp(Low, High, t);
+                var c = Tessera.Primitives.Color.Lerp(Low, High, t);
                 // Each day is a 2-wide cell for a squarer look.
                 var rect = new Rect(area.X + w * 2, area.Y + d, 2, 1);
                 surface.FillRect(rect, new Style(Color.Default, c));

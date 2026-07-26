@@ -15,12 +15,20 @@ namespace Tessera.Widgets.Charts;
 /// </summary>
 public sealed class FlameGraph<T> : Widget
 {
-    private FlameNode<T>? _root;      // the true root of the data
-    private FlameNode<T>? _zoom;      // the frame currently zoomed to (defaults to root)
-    private FlameNode<T>? _selected;  // the highlighted frame
+    private FlameNode<T>? _root;
+    private FlameNode<T>? _zoom;
+    private FlameNode<T>? _selected;
 
     // Per-render layout record for hit-testing: each drawn frame's screen rect + node.
     private readonly List<(Rect rect, FlameNode<T> node)> _hits = new();
+
+    // Warm flame-ish palette (reds/oranges/yellows) with a couple of cooler accents.
+    private static readonly Color[] Palette =
+    {
+        Color.Hex("#d9534f"), Color.Hex("#e8724f"), Color.Hex("#f0904f"),
+        Color.Hex("#f4bf75"), Color.Hex("#e6c34f"), Color.Hex("#d98f4f"),
+        Color.Hex("#c9534f"), Color.Hex("#e07b53"),
+    };
 
     /// <summary>Maps a frame to its bar color. Null uses a hash-of-label palette rotation.</summary>
     public Func<FlameNode<T>, Color>? ColorSelector { get; set; }
@@ -84,7 +92,6 @@ public sealed class FlameGraph<T> : Widget
         double rootWeight = _zoom.Weight;
         if (rootWeight <= 0) return;
 
-        // The zoomed frame occupies the entire top row; each deeper level is one row down.
         DrawFrame(surface, _zoom, area.X, area.Y, area.Width, area, theme, depth: 0);
     }
 
@@ -96,7 +103,6 @@ public sealed class FlameGraph<T> : Widget
 
         var color = ColorSelector?.Invoke(node) ?? PaletteFor(node.Label);
         bool isSelected = ReferenceEqualities(node, _selected);
-        // Selected frame gets a brighter fill; others use the frame color.
         var fillBg = isSelected ? theme.Accent : color;
         var fg = Contrast(fillBg);
 
@@ -131,7 +137,6 @@ public sealed class FlameGraph<T> : Widget
         {
             var child = node.Children[i];
             if (remainingWeight <= 0) break;
-            // Proportional width, rounded; clamp so we never overflow the parent's span.
             int cw = (int)Math.Round(child.Weight / parentWeight * width);
             cw = Math.Min(cw, remainingWidth);
             if (cw <= 0) { continue; }
@@ -162,7 +167,7 @@ public sealed class FlameGraph<T> : Widget
             var (rect, node) = _hits[i];
             if (rect.Contains(m.X, m.Y))
             {
-                if (ReferenceEqualities(node, _selected)) ZoomTo(node); // click selected = zoom
+                if (ReferenceEqualities(node, _selected)) ZoomTo(node);
                 else Select(node);
                 return true;
             }
@@ -224,14 +229,6 @@ public sealed class FlameGraph<T> : Widget
         for (int i = 0; i < label.Length; i++) h = h * 31 + label[i];
         return Palette[(h & 0x7fffffff) % Palette.Length];
     }
-
-    // Warm flame-ish palette (reds/oranges/yellows) with a couple of cooler accents.
-    private static readonly Color[] Palette =
-    {
-        Colors.Hex("#d9534f"), Colors.Hex("#e8724f"), Colors.Hex("#f0904f"),
-        Colors.Hex("#f4bf75"), Colors.Hex("#e6c34f"), Colors.Hex("#d98f4f"),
-        Colors.Hex("#c9534f"), Colors.Hex("#e07b53"),
-    };
 
     // Picks black or white text for legibility over a background color.
     private static Color Contrast(Color bg)

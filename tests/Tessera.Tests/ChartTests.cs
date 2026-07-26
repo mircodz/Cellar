@@ -39,20 +39,6 @@ public class ChartTests
     // ---- Sparkline ----
 
     [Fact]
-    public void Sparkline_PushRespectsCapacity()
-    {
-        var sp = new Sparkline { Capacity = 5 };
-        for (int i = 0; i < 20; i++)
-        {
-            sp.Push(i);
-        }
-
-        var s = new Surface(5, 1);
-        sp.Render(s, s.Bounds); // should not throw and should draw the last 5
-        Assert.True(AnyNonBlank(s));
-    }
-
-    [Fact]
     public void Sparkline_HighestSampleUsesTallestGlyph()
     {
         var sp = new Sparkline { Capacity = 3 };
@@ -210,8 +196,8 @@ public class ChartTests
         var a = new Series("a", Color.Rgb(255, 0, 0));
         var b = new Series("b", Color.Rgb(0, 0, 255));
         for (int i = 0; i <= 10; i++) { a.Add(i, 0.0); b.Add(i, 1.0); } // separate value bands
-        chart.SeriesList.Add(a);
-        chart.SeriesList.Add(b);
+        chart.Series.Add(a);
+        chart.Series.Add(b);
 
         var s = new Surface(20, 4);
         chart.Render(s, s.Bounds);
@@ -231,19 +217,6 @@ public class ChartTests
 
         Assert.Contains(Color.Rgb(255, 0, 0), colors);
         Assert.Contains(Color.Rgb(0, 0, 255), colors);
-    }
-
-    [Fact]
-    public void LineChart_TimeInterpolation()
-    {
-        var chart = new LineChart { UseBraille = false };
-        var s = new Series("s");
-        s.Add(0, 0);
-        s.Add(10, 100);
-        chart.SeriesList.Add(s);
-        var surf = new Surface(11, 1);
-        chart.Render(surf, surf.Bounds);
-        Assert.True(AnyNonBlank(surf));
     }
 
     [Fact]

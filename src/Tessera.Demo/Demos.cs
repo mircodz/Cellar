@@ -111,7 +111,7 @@ internal static class Demos
         json.AddChild(F("Utf8.Encode", 14.1, 11));
         root.AddChild(F("Middleware.Log", 6.7, 5));
         root.ExpandAll();
-        tree.Invalidate();
+        tree.MarkDirty();
         tree.HasFocus = true;
 
         var jumped = new Label(new StyledText("click a 0x… address to jump", Theme.Current.MutedStyle));
@@ -139,8 +139,8 @@ internal static class Demos
         // Top-left: a compact allocation table.
         var table = new Table { ShowHeader = true, Striped = true, SelectedIndex = 0 };
         table.Columns.Add(new Column("Type", Constraint.Fill()));
-        table.Columns.Add(new Column("MiB", Constraint.Length(7), Alignment.Right));
-        table.Columns.Add(new Column("Count", Constraint.Length(7), Alignment.Right));
+        table.Columns.Add(new Column("MiB", Constraint.Length(7), Justify.Right));
+        table.Columns.Add(new Column("Count", Constraint.Length(7), Justify.Right));
         string[] types = { "String", "Byte[]", "Dictionary", "Task", "Node<T>", "Buffer" };
         var rng = new Random(11);
         for (int i = 0; i < types.Length; i++)
@@ -168,16 +168,16 @@ internal static class Demos
             Values = { ("heap", 42), ("stack", 18), ("code", 27), ("meta", 9), ("jit", 33) },
             BarColors =
             {
-                Colors.Hex("#6a9fb5"), Colors.Hex("#90a959"), Colors.Hex("#f4bf75"),
-                Colors.Hex("#aa759f"), Colors.Hex("#ac4142"),
+                Color.Hex("#6a9fb5"), Color.Hex("#90a959"), Color.Hex("#f4bf75"),
+                Color.Hex("#aa759f"), Color.Hex("#ac4142"),
             },
         };
 
         // A proportion strip across the bottom.
         var strip = new ProportionBar { ShowInlineLabels = true };
-        strip.Segments.Add(new Segment("Gen0", 55, Colors.Hex("#6a9fb5")));
-        strip.Segments.Add(new Segment("Gen1", 28, Colors.Hex("#90a959")));
-        strip.Segments.Add(new Segment("Gen2", 17, Colors.Hex("#f4bf75")));
+        strip.Segments.Add(new Segment("Gen0", 55, Color.Hex("#6a9fb5")));
+        strip.Segments.Add(new Segment("Gen1", 28, Color.Hex("#90a959")));
+        strip.Segments.Add(new Segment("Gen2", 17, Color.Hex("#f4bf75")));
 
         // A live spinner in the header, self-animating (no manual Advance).
         var spinner = new Spinner(SpinnerFrames.Dots, "live") { AutoAnimate = true };
@@ -240,12 +240,12 @@ internal static class Demos
     private static Widget LineChartDemo(DemoContext ctx)
     {
         var chart = new LineChart { UseBraille = true };
-        var sine = new Series("sin", Colors.Hex("#6a9fb5"));
-        var cosine = new Series("cos", Colors.Hex("#90a959"));
-        var walk = new Series("walk", Colors.Hex("#aa759f"));
-        chart.SeriesList.Add(sine);
-        chart.SeriesList.Add(cosine);
-        chart.SeriesList.Add(walk);
+        var sine = new Series("sin", Color.Hex("#6a9fb5"));
+        var cosine = new Series("cos", Color.Hex("#90a959"));
+        var walk = new Series("walk", Color.Hex("#aa759f"));
+        chart.Series.Add(sine);
+        chart.Series.Add(cosine);
+        chart.Series.Add(walk);
         double t = 0;
         var rng = new Random(3);
         double last = 0;
@@ -268,9 +268,9 @@ internal static class Demos
         Seed();
         ctx.Tick += _ => Step();
 
-        var legend = new Label(StyledText.Of("● sin ").Fg(Colors.Hex("#6a9fb5"))
-            .Append("● cos ").Fg(Colors.Hex("#90a959"))
-            .Append("● walk").Fg(Colors.Hex("#aa759f")));
+        var legend = new Label(StyledText.Of("● sin ").Fg(Color.Hex("#6a9fb5"))
+            .Append("● cos ").Fg(Color.Hex("#90a959"))
+            .Append("● walk").Fg(Color.Hex("#aa759f")));
         return new Stack(Direction.Vertical)
             .Add(new Padding(legend, new Thickness(1, 0)), Constraint.Length(1))
             .Add(new Padding(chart, new Thickness(1, 0)), Constraint.Fill());
@@ -296,8 +296,8 @@ internal static class Demos
             Values = { ("heap", 42), ("stack", 18), ("code", 27), ("metadata", 9), ("jit", 33), ("threads", 14) },
             BarColors =
             {
-                Colors.Hex("#6a9fb5"), Colors.Hex("#90a959"), Colors.Hex("#f4bf75"),
-                Colors.Hex("#aa759f"), Colors.Hex("#ac4142"), Colors.Hex("#75b5aa"),
+                Color.Hex("#6a9fb5"), Color.Hex("#90a959"), Color.Hex("#f4bf75"),
+                Color.Hex("#aa759f"), Color.Hex("#ac4142"), Color.Hex("#75b5aa"),
             },
         };
         return Padded(bar);
@@ -334,8 +334,8 @@ internal static class Demos
     {
         Color[] palette =
         {
-            Colors.Hex("#6a9fb5"), Colors.Hex("#90a959"), Colors.Hex("#f4bf75"),
-            Colors.Hex("#aa759f"), Colors.Hex("#ac4142"),
+            Color.Hex("#6a9fb5"), Color.Hex("#90a959"), Color.Hex("#f4bf75"),
+            Color.Hex("#aa759f"), Color.Hex("#ac4142"),
         };
         (string, double)[] parts = { ("String", 42), ("Byte[]", 23), ("Dictionary", 15), ("Node", 12), ("other", 8) };
         var bar = new ProportionBar { ShowInlineLabels = true };
@@ -497,11 +497,11 @@ internal static class Demos
     private static Widget Gradient(DemoContext ctx) =>
         Padded(new Stack(Direction.Vertical)
             .Add(new Label(StyledText.Empty()), Constraint.Length(1))
-            .Add(new GradientBar("█", Colors.Hex("#ac4142"), Colors.Hex("#f4bf75"), Colors.Hex("#90a959")), Constraint.Length(1))
+            .Add(new GradientBar("█", Color.Hex("#ac4142"), Color.Hex("#f4bf75"), Color.Hex("#90a959")), Constraint.Length(1))
             .Add(new Label(StyledText.Empty()), Constraint.Length(1))
-            .Add(new GradientBar("█", Colors.Hex("#6a9fb5"), Colors.Hex("#aa759f")), Constraint.Length(1))
+            .Add(new GradientBar("█", Color.Hex("#6a9fb5"), Color.Hex("#aa759f")), Constraint.Length(1))
             .Add(new Label(StyledText.Empty()), Constraint.Length(1))
-            .Add(new GradientBar("█", Colors.Hsl(0, 0.7, 0.5), Colors.Hsl(120, 0.7, 0.5), Colors.Hsl(240, 0.7, 0.5)), Constraint.Length(1))
+            .Add(new GradientBar("█", Color.Hsl(0, 0.7, 0.5), Color.Hsl(120, 0.7, 0.5), Color.Hsl(240, 0.7, 0.5)), Constraint.Length(1))
             .Add(new Label(StyledText.Empty()), Constraint.Fill()));
 
     // ---- helpers ----
@@ -513,8 +513,8 @@ internal static class Demos
     {
         var colors = new[]
         {
-            Colors.Hex("#6a9fb5"), Colors.Hex("#90a959"), Colors.Hex("#f4bf75"), Colors.Hex("#aa759f"),
-            Colors.Hex("#ac4142"), Colors.Hex("#75b5aa"), Colors.Hex("#d28445"), Colors.Hex("#8f5536"),
+            Color.Hex("#6a9fb5"), Color.Hex("#90a959"), Color.Hex("#f4bf75"), Color.Hex("#aa759f"),
+            Color.Hex("#ac4142"), Color.Hex("#75b5aa"), Color.Hex("#d28445"), Color.Hex("#8f5536"),
         };
         var grid = new ColorSwatchGrid { Colors = colors, Columns = 8, Selected = 2, HasFocus = true };
         return Padded(new Stack(Direction.Vertical)
@@ -548,7 +548,7 @@ internal static class Demos
         var t = new Table { ShowHeader = true, SelectedIndex = 0, Striped = true, ShowScrollbar = true, Sortable = true };
         foreach (var (header, width, right) in columns)
         {
-            t.Columns.Add(new Column(header, width, right ? Alignment.Right : Alignment.Left)
+            t.Columns.Add(new Column(header, width, right ? Justify.Right : Justify.Left)
                 { SortKey = right ? s => ParseNum(s) : null });
         }
         return t;

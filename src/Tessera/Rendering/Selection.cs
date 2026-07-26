@@ -58,19 +58,19 @@ public readonly struct Selection
 
         if (start.Y == end.Y)
         {
-            return x >= start.X && x <= end.X; // single line
+            return x >= start.X && x <= end.X;
         }
 
         if (y == start.Y)
         {
-            return x >= start.X; // first line: from start.X on
+            return x >= start.X;
         }
 
         if (y == end.Y)
         {
-            return x <= end.X; // last line: up to end.X
+            return x <= end.X;
         }
 
-        return true; // middle lines: whole row
+        return true;
     }
 }

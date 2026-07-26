@@ -83,14 +83,11 @@ public sealed class Surface
 
         if (cell.IsWide)
         {
-            // Need the trailing column too; if it falls outside the clip, blank instead.
             if (!_clip.Contains(x + 1, y))
             {
                 WriteRaw(x, y, Cell.Blank(cell.Style));
                 return;
             }
-            // Overwriting the left half of an existing wide glyph to our left would leave
-            // a dangling continuation; clean it up.
             ClearOrphanedWideLeft(x, y);
             WriteRaw(x, y, cell);
             WriteRaw(x + 1, y, Cell.Continuation(cell.Style));
@@ -101,8 +98,6 @@ public sealed class Surface
         }
         else
         {
-            // Writing a narrow cell over the left half of a wide glyph must clear that
-            // glyph's now-orphaned continuation to its right.
             var existing = Get(x, y);
             WriteRaw(x, y, cell);
             if (existing.IsWide)
@@ -267,8 +262,7 @@ public sealed class Surface
         }
 
         var left = Get(x - 1, y);
-        var here = Get(x, y);
-        if (left.IsWide && !here.IsContinuation)
+        if (left.IsWide)
         {
             WriteRaw(x - 1, y, Cell.Blank(left.Style));
         }

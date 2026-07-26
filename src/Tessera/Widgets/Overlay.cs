@@ -25,6 +25,8 @@ public enum OverlayPlacement
 /// </summary>
 public sealed class Overlay
 {
+    private Rect _lastRect;
+
     public Widget Content { get; set; }
 
     /// <summary>Whether this overlay captures all input (true) or passes unhandled through.</summary>
@@ -103,8 +105,6 @@ public sealed class Overlay
         Content.Render(surface, rect);
         surface.ResetClip();
     }
-
-    private Rect _lastRect;
 
     /// <summary>The rectangle the overlay occupied on its last render (for hit-testing).</summary>
     public Rect LastRect => _lastRect;

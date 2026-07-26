@@ -22,7 +22,7 @@ public sealed class Screen
         _back = new Surface(width, height);
         _front = new Cell[width * height];
         _styleWriter = new AnsiStyleWriter(depth);
-        _frontValid = false; // force a full paint on first diff
+        _frontValid = false;
     }
 
     /// <summary>The back buffer widgets draw into for the next frame.</summary>
@@ -57,7 +57,7 @@ public sealed class Screen
         }
     }
 
-    /// <summary>Returns the ANSI patching front→back, then promotes back to front. Empty if unchanged.</summary>
+    /// <summary>Returns the front-to-back ANSI patch as an allocated string.</summary>
     public string ComputeDiff() => BuildDiff().ToString();
 
     /// <summary>
@@ -84,7 +84,6 @@ public sealed class Screen
             {
                 var cell = _back.Get(x, y);
 
-                // A continuation cell was already emitted with its wide partner; skip.
                 if (cell.IsContinuation)
                 {
                     x++;
@@ -100,7 +99,6 @@ public sealed class Screen
 
                 anyChanged = true;
 
-                // Move the cursor if we're not already positioned here.
                 if (!cursorKnown || cursorX != x || cursorY != y)
                 {
                     sb.Append("\x1b[").Append(y + 1).Append(';').Append(x + 1).Append('H');
@@ -109,7 +107,6 @@ public sealed class Screen
                     cursorKnown = true;
                 }
 
-                // Emit style only when it differs from what's currently active.
                 if (!styleKnown || lastStyle != cell.Style)
                 {
                     _styleWriter.WriteTransition(sb, cell.Style);
@@ -134,7 +131,7 @@ public sealed class Screen
 
         if (sb.Length > 0)
         {
-            sb.Append("\x1b[0m"); // leave the terminal in a clean state
+            sb.Append(Terminal.Ansi.Reset); // leave the terminal in a clean state
         }
 
         // Nothing changed and the front is already a valid mirror of the back: the copy would

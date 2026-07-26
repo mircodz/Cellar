@@ -30,8 +30,8 @@ public sealed class DebugPanel : Widget
     // 1s window holds ~60 entries, so 128 slots is ample; a full ring overwrites its oldest.
     private readonly long[] _stampMs = new long[128];
     private readonly double[] _stampFrameMs = new double[128];
-    private int _head;  // next write slot
-    private int _count; // live entries
+    private int _head;
+    private int _count;
 
     private long _nextColumnAt = -1; // wall-clock ms the next graph column is due; -1 until first frame
 
@@ -48,7 +48,6 @@ public sealed class DebugPanel : Widget
         _lastAllocBytes = allocBytes;
         _lastDiffLen = diffLen;
 
-        // Append this frame, then read the rolling window for the headline.
         _stampMs[_head] = now;
         _stampFrameMs[_head] = frameMs;
         _head = (_head + 1) % _stampMs.Length;
@@ -120,25 +119,21 @@ public sealed class DebugPanel : Widget
         int w = right - x;
         int y = area.Y;
 
-        // Headline numbers.
         surface.DrawText(x, y, $"FPS {_lastFps,5:0.0}   {_lastFrameMs,5:0.00}ms", style);
         y += 1;
 
-        // FPS sparkline band (label row + multi-row chart).
         surface.DrawText(x, y, "fps", style);
         y += 1;
         int fpsRows = Math.Max(1, (area.Bottom - y - 5));
         _fps.Render(surface, new Rect(x, y, w, fpsRows));
         y += fpsRows;
 
-        // Frame-time sparkline band.
         surface.DrawText(x, y, "frame ms", style);
         y += 1;
         int frameRows = Math.Max(1, area.Bottom - y - 1);
         _frame.Render(surface, new Rect(x, y, w, frameRows));
         y += frameRows;
 
-        // Footer: allocation + diff size for the frame.
         surface.DrawText(x, y, $"alloc {Bytes(_lastAllocBytes)}  diff {Bytes(_lastDiffLen)}", style);
     }
 

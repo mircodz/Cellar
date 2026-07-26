@@ -12,7 +12,7 @@ namespace Tessera.Demo;
 /// cell painting (FillRect) + keyboard/mouse routing against the last-rendered rect.</summary>
 public sealed class ColorSwatchGrid : Widget
 {
-    public Color[] Colors { get; init; } = Array.Empty<Color>();
+    public Color[] Colors { get; init; } = [];
     public int Columns { get; init; } = 8;
     public int Selected { get; set; }
 

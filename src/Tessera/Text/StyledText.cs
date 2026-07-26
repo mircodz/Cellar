@@ -121,8 +121,6 @@ public sealed class StyledText
     /// <summary>Returns an immutable snapshot of the spans for rendering.</summary>
     public Span[] ToSpans() => _spans.ToArray();
 
-    // ---- Fluent style decorators (apply to the current / last span) ----
-
     public StyledText Fg(Color color) => MutateCurrent(s => s.WithStyle(s.Style.WithForeground(color)));
     public StyledText Bg(Color color) => MutateCurrent(s => s.WithStyle(s.Style.WithBackground(color)));
     public StyledText Bold() => AddAttr(TextAttributes.Bold);

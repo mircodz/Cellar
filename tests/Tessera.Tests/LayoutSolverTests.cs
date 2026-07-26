@@ -66,6 +66,21 @@ public class LayoutSolverTests
     }
 
     [Fact]
+    public void AllCapped_LeavesRemainderUnfilled_RatherThanBreakACap()
+    {
+        // Every slot is capped and the caps fall short of the total. Nothing may grow past its
+        // cap, so the leftover stays unfilled (add a Fill to consume it). The result never
+        // overflows and never exceeds a cap.
+        var sizes = LayoutSolver.Solve(100, [Constraint.Max(10), Constraint.Max(10)]);
+        Assert.Equal(10, sizes[0]);
+        Assert.Equal(10, sizes[1]);
+
+        var mixed = LayoutSolver.Solve(100, [Constraint.Length(20), Constraint.Max(10)]);
+        Assert.Equal(20, mixed[0]);
+        Assert.Equal(10, mixed[1]);
+    }
+
+    [Fact]
     public void OverConstrained_ShrinksToFit()
     {
         var sizes = LayoutSolver.Solve(50, [Constraint.Length(40), Constraint.Length(40)]);
@@ -125,6 +140,25 @@ public class LayoutSolverTests
         // split covers the full width (bug: last column was never painted).
         var sizes = LayoutSolver.Solve(100, [Constraint.Percentage(33), Constraint.Percentage(33), Constraint.Percentage(33)]);
         Assert.Equal(100, Sum(sizes));
+    }
+
+    [Fact]
+    public void Percentages_WithLargeShortfall_StillTileExactly()
+    {
+        var sizes = LayoutSolver.Solve(100,
+            [Constraint.Percentage(40), Constraint.Percentage(40)]);
+
+        Assert.Equal([50, 50], sizes);
+    }
+
+    [Fact]
+    public void OversizedFixedConstraints_DoNotOverflowArithmetic()
+    {
+        var sizes = LayoutSolver.Solve(100,
+            [Constraint.Length(int.MaxValue), Constraint.Length(int.MaxValue)]);
+
+        Assert.Equal(100, Sum(sizes));
+        Assert.All(sizes, size => Assert.True(size >= 0));
     }
 
     [Fact]

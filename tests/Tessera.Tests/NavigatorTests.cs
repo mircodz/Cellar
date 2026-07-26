@@ -191,4 +191,42 @@ public class NavigatorTests
         nav.OnEvent(new MouseEvent(MouseEventKind.Down, MouseButton.Left, 10, 0, KeyModifiers.None));
         Assert.Equal(2, nav.Depth);
     }
+
+    [Fact]
+    public void MountedNavigator_MountsPushedPage_AndUnmountsOnPop()
+    {
+        using var app = new App(new FakeTerminal());
+        var root = new MountProbe();
+        var nav = new Navigator(new Page("Home", root));
+        nav.Mount(app);
+
+        var s = new Surface(40, 10);
+        nav.Render(s, s.Bounds);
+        Assert.True(root.IsMounted); // the visible root page becomes live on first render
+
+        var detail = new MountProbe();
+        nav.Push("Detail", detail);
+        Assert.True(detail.IsMounted); // a pushed page starts its lifecycle immediately
+
+        nav.Pop();
+        Assert.False(detail.IsMounted); // popping cancels the page's work
+        Assert.True(root.IsMounted);    // the page beneath stays live
+    }
+
+    [Fact]
+    public void UnmountingNavigator_UnmountsAllPages()
+    {
+        using var app = new App(new FakeTerminal());
+        var root = new MountProbe();
+        var detail = new MountProbe();
+        var nav = new Navigator(new Page("Home", root));
+        nav.Mount(app);
+        var s = new Surface(40, 10);
+        nav.Render(s, s.Bounds);
+        nav.Push("Detail", detail);
+
+        nav.Unmount();
+        Assert.False(root.IsMounted);
+        Assert.False(detail.IsMounted);
+    }
 }

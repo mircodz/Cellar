@@ -47,7 +47,7 @@ public sealed class Series
 /// </summary>
 public sealed class LineChart : Widget
 {
-    public List<Series> SeriesList { get; } = new();
+    public List<Series> Series { get; } = new();
 
     /// <summary>When true, render braille subpixels; otherwise block columns.</summary>
     public bool UseBraille { get; set; } = true;
@@ -63,7 +63,8 @@ public sealed class LineChart : Widget
 
     private static readonly string[] Blocks = { " ", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█" };
 
-    // --- Backward-compatible single-series facade over SeriesList[0]. ---
+    // Reused braille dot-grid buffer, sized to the plot area (packed 1 byte per cell).
+    private byte[] _brailleCells = [];
 
     /// <summary>
     /// Convenience view of the first series as a plain value list (time = sample index).
@@ -73,22 +74,21 @@ public sealed class LineChart : Widget
 
     private Series EnsureDefaultSeries()
     {
-        if (SeriesList.Count == 0)
+        if (Series.Count == 0)
         {
-            SeriesList.Add(new Series("series"));
+            Series.Add(new Series("series"));
         }
 
-        return SeriesList[0];
+        return Series[0];
     }
 
     public override void Render(Surface surface, Rect area)
     {
-        if (area.IsEmpty || SeriesList.Count == 0)
+        if (area.IsEmpty || Series.Count == 0)
         {
             return;
         }
 
-        // Auto-fit the visible window to the full time span across all series.
         (double start, double end) = TimeRange();
         (double vMin, double vRange) = ValueRange(start, end);
 
@@ -127,7 +127,7 @@ public sealed class LineChart : Widget
         }
         var cells = _brailleCells;
 
-        foreach (var series in SeriesList)
+        foreach (var series in Series)
         {
             if (series.Points.Count == 0)
             {
@@ -172,8 +172,6 @@ public sealed class LineChart : Widget
         }
     }
 
-    private byte[] _brailleCells = Array.Empty<byte>();
-
     private void RenderBlocks(Surface surface, Rect area, double start, double end,
         double vMin, double vRange, Theme theme)
     {
@@ -183,7 +181,7 @@ public sealed class LineChart : Widget
             span = 1;
         }
 
-        foreach (var series in SeriesList)
+        foreach (var series in Series)
         {
             if (series.Points.Count == 0)
             {
@@ -221,7 +219,6 @@ public sealed class LineChart : Widget
             return false;
         }
 
-        // Binary search for the segment containing t.
         int lo = 0, hi = pts.Count - 1;
         while (hi - lo > 1)
         {
@@ -246,7 +243,7 @@ public sealed class LineChart : Widget
     private (double min, double max) TimeRange()
     {
         double min = double.MaxValue, max = double.MinValue;
-        foreach (var s in SeriesList)
+        foreach (var s in Series)
         {
             if (s.Points.Count == 0)
             {
@@ -263,7 +260,7 @@ public sealed class LineChart : Widget
     private (double min, double range) ValueRange(double start, double end)
     {
         double min = double.MaxValue, max = double.MinValue;
-        foreach (var s in SeriesList)
+        foreach (var s in Series)
         {
             foreach (var (t, v) in s.Points)
             {
@@ -281,7 +278,6 @@ public sealed class LineChart : Widget
         return (min, range);
     }
 
-    // Adapter that lets `Values` behave like a mutable list backed by the default series.
     private sealed class DefaultSeriesValues(LineChart chart) : IList<double>
     {
         private Series S => chart.EnsureDefaultSeries();
@@ -292,7 +288,7 @@ public sealed class LineChart : Widget
             set => S.Points[index] = (index, value);
         }
 
-        public int Count => chart.SeriesList.Count == 0 ? 0 : chart.SeriesList[0].Points.Count;
+        public int Count => chart.Series.Count == 0 ? 0 : chart.Series[0].Points.Count;
         public bool IsReadOnly => false;
 
         public void Add(double item)

@@ -29,6 +29,18 @@ public sealed class Segment
 /// </summary>
 public sealed class ProportionBar : Widget
 {
+    private static readonly IReadOnlyList<Color> DefaultPalette =
+    [
+        Color.Hex("#6a9fb5"), // blue
+        Color.Hex("#90a959"), // green
+        Color.Hex("#f4bf75"), // yellow
+        Color.Hex("#aa759f"), // magenta
+        Color.Hex("#ac4142"), // red
+        Color.Hex("#75b5aa"), // cyan
+        Color.Hex("#d28445"), // orange
+        Color.Hex("#8f5536") // brown
+    ];
+
     /// <summary>The segments, in draw order (left to right).</summary>
     public List<Segment> Segments { get; } = new();
 
@@ -69,7 +81,6 @@ public sealed class ProportionBar : Widget
                 for (int row = area.Top; row < area.Bottom; row++)
                     surface.Set(x + col, row, Cell.FromGrapheme(Glyph, style));
 
-            // Optionally overlay the label if it fits within the segment.
             if (ShowInlineLabels && w >= Segments[i].Label.Length + 1)
             {
                 // Use a contrasting foreground (the bar color as background) for legibility.
@@ -126,16 +137,4 @@ public sealed class ProportionBar : Widget
 
         return widths;
     }
-
-    private static readonly IReadOnlyList<Color> DefaultPalette =
-    [
-        Colors.Hex("#6a9fb5"), // blue
-        Colors.Hex("#90a959"), // green
-        Colors.Hex("#f4bf75"), // yellow
-        Colors.Hex("#aa759f"), // magenta
-        Colors.Hex("#ac4142"), // red
-        Colors.Hex("#75b5aa"), // cyan
-        Colors.Hex("#d28445"), // orange
-        Colors.Hex("#8f5536") // brown
-    ];
 }

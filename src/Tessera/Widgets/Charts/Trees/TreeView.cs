@@ -23,10 +23,10 @@ public sealed class TreeView<T> : Widget
     private readonly List<Row> _flat = new();
     private bool _dirty = true;
 
-    private int _selected;      // index into _flat
-    private int _scroll;        // first visible row index
-    private int _viewportRows;  // set on render
-    private Rect _lastArea;     // captured on render for mouse hit-testing
+    private int _selected;
+    private int _scroll;
+    private int _viewportRows;
+    private Rect _lastArea;
 
     // Per visible row, the caret's screen x-range [start, end), for precise click hit-testing.
     private readonly List<(int y, int caretStart, int caretEnd, int flatIndex)> _rowHits = new();
@@ -113,9 +113,7 @@ public sealed class TreeView<T> : Widget
     }
 
     /// <summary>Marks the flattened view stale (call after mutating expansion externally).</summary>
-    public void Invalidate() => _dirty = true;
-
-    // ---- Rendering ----
+    public void MarkDirty() => _dirty = true;
 
     public override void Render(Surface surface, Rect area)
     {
@@ -135,7 +133,6 @@ public sealed class TreeView<T> : Widget
         int columnsWidth = ColumnsBandWidth();
         int labelRight = area.Right - columnsWidth;
 
-        // An optional header row consumes the top line; rows render below it.
         int rowsTop = area.Y;
         int rowsHeight = area.Height;
         if (ShowHeader && Columns.Count > 0 && area.Height > 0)
@@ -160,7 +157,6 @@ public sealed class TreeView<T> : Widget
             bool selected = flatIndex == _selected;
             bool striped = !selected && Striped && (flatIndex & 1) == 1;
 
-            // Selection and stripe each paint a full-width row background.
             Style? rowBg = null;
             if (selected)
             {
@@ -176,18 +172,15 @@ public sealed class TreeView<T> : Widget
                 surface.FillRect(new Rect(area.X, y, area.Width, 1), bg);
             }
 
-            // Guides/caret inherit the row background so the stripe/selection reads across.
             var effGuideStyle = rowBg is { } g1 ? guideStyle.WithBackground(g1.Background) : guideStyle;
 
             int x = area.X;
 
-            // Indentation guides for ancestor levels.
             if (ShowGuides && row.Depth > 0)
             {
                 x = DrawGuides(surface, x, y, row, effGuideStyle, rowBg);
             }
 
-            // Expand caret / leaf marker.
             var node = row.Node;
             string caret = node.HasChildren
                 ? (node.IsExpanded ? Guides.ExpandedCaret : Guides.CollapsedCaret)
@@ -195,10 +188,8 @@ public sealed class TreeView<T> : Widget
             var caretStyle = selected ? selStyle : effGuideStyle;
             int caretStart = x;
             x = surface.DrawText(x, y, caret, caretStyle);
-            // Record the caret's clickable range (only meaningful when the node can expand).
             _rowHits.Add((y, caretStart, node.HasChildren ? x : caretStart, flatIndex));
 
-            // The caller-rendered label, clipped to the label column (left of the metric band).
             var label = RenderLabel(node);
             int labelWidth = labelRight - x;
             if (labelWidth > 0)
@@ -214,7 +205,6 @@ public sealed class TreeView<T> : Widget
                 surface.ResetClip();
             }
 
-            // The aligned metric columns on the right.
             if (Columns.Count > 0)
             {
                 DrawColumns(surface, labelRight, y, node, selected ? selStyle : null,
@@ -222,7 +212,6 @@ public sealed class TreeView<T> : Widget
             }
         }
 
-        // Underline whichever link the cursor is currently over.
         DrawHoverEmphasis(surface);
     }
 
@@ -252,11 +241,11 @@ public sealed class TreeView<T> : Widget
             var content = col.Render(node);
             if (forceStyle is { } fs)
             {
-                content = Recolor(content, fs);         // selection: full recolor
+                content = Recolor(content, fs);
             }
             else if (stripeBg is { } sb)
             {
-                content = RecolorBackground(content, sb); // stripe: keep fg
+                content = RecolorBackground(content, sb);
             }
 
             var justify = col.Align == TreeColumnAlign.Right ? Justify.Right : Justify.Left;
@@ -272,7 +261,6 @@ public sealed class TreeView<T> : Widget
         var headerStyle = theme.HeaderStyle;
         surface.FillRect(new Rect(area.X, area.Y, area.Width, 1), new Style(theme.Foreground, Color.Default));
 
-        // No label-column header text (the tree's name column is self-evident); draw metric heads.
         int x = labelRight + ColumnSpacing;
         foreach (var col in Columns)
         {
@@ -347,7 +335,6 @@ public sealed class TreeView<T> : Widget
 
     private static StyledText Recolor(StyledText label, Style style)
     {
-        // Re-emit the label's text under the selection style so it reads on the highlight.
         var result = StyledText.Empty();
         foreach (var span in label.Spans)
         {
@@ -368,8 +355,6 @@ public sealed class TreeView<T> : Widget
 
         return result;
     }
-
-    // ---- Flattening (the cached visible-row list) ----
 
     private void EnsureFlattened()
     {
@@ -402,8 +387,6 @@ public sealed class TreeView<T> : Widget
         }
     }
 
-    // ---- Input ----
-
     public override bool OnEvent(InputEvent e)
     {
         switch (e)
@@ -414,7 +397,6 @@ public sealed class TreeView<T> : Widget
                 MoveSelection(wheel.Button == MouseButton.WheelUp ? -1 : 1);
                 return true;
             case MouseEvent { Kind: MouseEventKind.Move } move:
-                // Update the hovered link; a change means the emphasis must repaint.
                 return UpdateHover(move.X, move.Y);
             case MouseEvent { Kind: MouseEventKind.Down } click:
                 return HandleClick(click);
@@ -446,7 +428,6 @@ public sealed class TreeView<T> : Widget
                 }
                 return true;
         }
-        // Space toggles expansion.
         if (key.IsChar && key.Rune.Value == ' ')
         {
             var n = SelectedNode;
@@ -471,7 +452,7 @@ public sealed class TreeView<T> : Widget
         }
         else if (node.IsExpanded)
         {
-            MoveSelection(1); // step into the first child
+            MoveSelection(1);
         }
     }
 
@@ -490,7 +471,6 @@ public sealed class TreeView<T> : Widget
         }
         else if (node.Parent is not null)
         {
-            // Jump selection to the parent row.
             EnsureFlattened();
             for (int i = 0; i < _flat.Count; i++)
             {
@@ -519,7 +499,6 @@ public sealed class TreeView<T> : Widget
             return false;
         }
 
-        // Clicking anywhere on a row selects it (so a details view can react to selection).
         SetSelection(rowIndex);
         var node = _flat[rowIndex].Node;
 

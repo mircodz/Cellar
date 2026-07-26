@@ -6,8 +6,13 @@ namespace Tessera.Layout;
 
 /// <summary>
 /// Splits a <see cref="Rect"/> into sub-rects along one axis by a list of
-/// <see cref="Constraint"/>s. Slots always tile the parent exactly, rounding remainder
-/// distributed deterministically left-to-right.
+/// <see cref="Constraint"/>s. Rounding remainder is distributed deterministically
+/// left-to-right. The slots tile the parent exactly as long as something can absorb the
+/// slack — a <see cref="Constraint.Fill"/> or <see cref="Constraint.Min"/> slot, or a
+/// <see cref="Constraint.Percentage"/>/<see cref="Constraint.Ratio"/> slot. If every slot is
+/// capped (all <see cref="Constraint.Length"/>/<see cref="Constraint.Max"/>) and the caps sum
+/// to less than the total, the leftover is left unfilled rather than break a cap — add a Fill
+/// to consume it.
 /// </summary>
 public static class LayoutSolver
 {
@@ -17,7 +22,7 @@ public static class LayoutSolver
         int n = constraints.Length;
         if (n == 0)
         {
-            return Array.Empty<Rect>();
+            return [];
         }
 
         int total = direction == Direction.Horizontal ? area.Width : area.Height;
@@ -65,7 +70,7 @@ public static class LayoutSolver
         Span<bool> open = rentedO is null ? stackalloc bool[n] : rentedO.AsSpan(0, n);
         Span<bool> proportional = rentedO is null ? stackalloc bool[n] : rentedO.AsSpan(n, n);
         double totalFlexWeight = 0;
-        int fixedSum = 0;
+        long fixedSum = 0;
 
         for (int i = 0; i < n; i++)
         {
@@ -116,7 +121,7 @@ public static class LayoutSolver
             }
         }
 
-        int remaining = total - fixedSum;
+        int remaining = fixedSum >= total ? 0 : total - (int)fixedSum;
 
         // Distribute leftover space to flexible slots by weight, respecting max bounds.
         // Iterate because clamping one slot at its max frees weight for the others.
@@ -193,32 +198,32 @@ public static class LayoutSolver
             }
         }
 
-        // Independent rounding of Percentage/Ratio slots can leave the sizes a cell or two
-        // short of the total with no flexible slot to absorb it. Hand the shortfall to the
-        // proportional slots left-to-right so the split still tiles exactly.
         if (remaining > 0 && totalFlexWeight <= 0)
         {
-            for (int i = 0; i < n && remaining > 0; i++)
+            bool distributed;
+            do
             {
-                if (proportional[i])
+                distributed = false;
+                for (int i = 0; i < n && remaining > 0; i++)
                 {
-                    sizes[i]++;
-                    remaining--;
+                    if (proportional[i])
+                    {
+                        sizes[i]++;
+                        remaining--;
+                        distributed = true;
+                    }
                 }
             }
+            while (remaining > 0 && distributed);
         }
 
-        // If constraints overshot the total, shrink so the sizes still sum to `total`. Shrink
-        // from the last slot backward, but first only from slots that can yield (Length /
-        // Percentage / Ratio go to 0 before a Min slot loses a cell). A last-resort pass
-        // ignores the floor if the Min slots alone still overflow.
-        int sum = 0;
+        long sum = 0;
         for (int i = 0; i < n; i++)
         {
             sum += sizes[i];
         }
 
-        int overflow = sum - total;
+        long overflow = sum - total;
         for (int pass = 0; pass < 2 && overflow > 0; pass++)
         {
             for (int i = n - 1; i >= 0 && overflow > 0; i--)
@@ -226,13 +231,13 @@ public static class LayoutSolver
                 int floor = pass == 0 && constraints[i].Type == Constraint.Kind.Min
                     ? min[i]
                     : 0;
-                int reducible = Math.Min(overflow, sizes[i] - floor);
+                long reducible = Math.Min(overflow, (long)sizes[i] - floor);
                 if (reducible <= 0)
                 {
                     continue;
                 }
 
-                sizes[i] -= reducible;
+                sizes[i] -= (int)reducible;
                 overflow -= reducible;
             }
         }

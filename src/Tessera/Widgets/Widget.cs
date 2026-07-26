@@ -13,6 +13,9 @@ namespace Tessera.Widgets;
 /// </summary>
 public abstract class Widget
 {
+    private List<LinkHit>? _links;
+    private object? _hoveredLink;
+
     /// <summary>Whether this widget has input focus. Container widgets override to propagate down.</summary>
     public virtual bool HasFocus { get; set; }
 
@@ -28,12 +31,8 @@ public abstract class Widget
     /// <summary>Handles an input event; returns true if consumed. Default: ignores all input.</summary>
     public virtual bool OnEvent(InputEvent e) => false;
 
-    // ---- Lifecycle (mount/unmount) ----
-    //
-    // The app notifies the tree when it enters (Mount) and leaves (Unmount) the live app, so a
-    // widget can start/stop background work (e.g. AsyncContent cancelling its factory, a Skeleton
-    // beginning its shimmer). This fires only at mount/unmount, not per frame. Containers opt in
-    // by overriding VisitChildren; leaf widgets need nothing.
+    // Mount and unmount run once per live-tree transition, not per frame. Containers expose
+    // descendants by overriding VisitChildren.
 
     /// <summary>Called once when the widget enters the live app tree. Override to start
     /// lifecycle-scoped work. Always call the base or drive children via <see cref="VisitChildren"/>.</summary>
@@ -63,9 +62,7 @@ public abstract class Widget
         OnUnmount();
     }
 
-    // ---- Clickable links (opt-in; costs nothing until a widget renders a linked span) ----
-
-    private List<LinkHit>? _links;
+    // Link hit tracking is allocated only when used.
 
     /// <summary>Raised when a rendered link is clicked, with its <see cref="StyledText.Link"/> payload.
     /// The consumer decides what a click means (e.g. navigate to a gcroot address).</summary>
@@ -96,8 +93,6 @@ public abstract class Widget
         }
         return false;
     }
-
-    private object? _hoveredLink;
 
     /// <summary>The link payload currently under the cursor, or null. Widgets restyle the
     /// hovered link on render; consumers can also read it or subscribe to <see cref="OnLinkHover"/>.</summary>

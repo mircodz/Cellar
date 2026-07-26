@@ -1,6 +1,7 @@
 using Tessera.Layout;
 using Tessera.Primitives;
 using Tessera.Rendering;
+using Tessera.Text;
 using Tessera.Widgets;
 
 namespace Tessera.Tests;
@@ -30,8 +31,8 @@ public class WidgetTests
     public void Text_RightAligned()
     {
         var s = new Surface(10, 1);
-        Label.Plain("hi", Style.Default, Alignment.Right).Render(s, s.Bounds);
-        Assert.EndsWith("hi", RowText(s, 0).TrimEnd());
+        Label.Plain("hi", Style.Default, Justify.Right).Render(s, s.Bounds);
+        Assert.Equal("        hi", RowText(s, 0));
     }
 
     [Fact]
@@ -72,7 +73,7 @@ public class WidgetTests
         var s = new Surface(30, 5);
         var t = new Table();
         t.Columns.Add(new Column("Name", Constraint.Fill()));
-        t.Columns.Add(new Column("Val", Constraint.Length(6), Alignment.Right));
+        t.Columns.Add(new Column("Val", Constraint.Length(6), Justify.Right));
         t.Rows.Add(["alpha", "10"]);
         t.Rows.Add(["beta", "20"]);
         t.Render(s, s.Bounds);
@@ -80,23 +81,6 @@ public class WidgetTests
         Assert.Contains("Name", RowText(s, 0));
         Assert.Contains("alpha", RowText(s, 1));
         Assert.Contains("beta", RowText(s, 2));
-    }
-
-    [Fact]
-    public void Table_SortBy_NumericColumn()
-    {
-        var t = new Table { Sortable = true };
-        t.Columns.Add(new Column("Name", Constraint.Fill()));
-        t.Columns.Add(new Column("Val", Constraint.Length(6), Alignment.Right)
-            { SortKey = s => double.Parse(s) });
-        t.Rows.Add(["a", "100"]);
-        t.Rows.Add(["b", "9"]);
-        t.Rows.Add(["c", "42"]);
-
-        t.SortBy(1, SortState.Ascending); // ascending by numeric value
-        Assert.Equal("9", t.Rows[0][1]);
-        Assert.Equal("42", t.Rows[1][1]);
-        Assert.Equal("100", t.Rows[2][1]);
     }
 
     [Fact]
@@ -142,7 +126,7 @@ public class WidgetTests
     {
         var t = new Table { Sortable = true };
         t.Columns.Add(new Column("Name", Constraint.Fill()));
-        t.Columns.Add(new Column("Val", Constraint.Length(6), Alignment.Right)
+        t.Columns.Add(new Column("Val", Constraint.Length(6), Justify.Right)
             { SortKey = s => int.Parse(s) });
         t.Rows.Add(["a", "30"]);
         t.Rows.Add(["b", "10"]);

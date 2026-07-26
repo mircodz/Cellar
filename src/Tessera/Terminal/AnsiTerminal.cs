@@ -269,7 +269,7 @@ public sealed class AnsiTerminal : ITerminal
             return forcedDepth;
         }
 
-        // 1. COLORTERM is the most reliable truecolor signal, set by most modern emulators.
+        // COLORTERM is the most reliable truecolor signal.
         string? colorterm = Environment.GetEnvironmentVariable("COLORTERM");
         if (colorterm is not null &&
             (colorterm.Contains("truecolor", StringComparison.OrdinalIgnoreCase) ||
@@ -278,8 +278,7 @@ public sealed class AnsiTerminal : ITerminal
             return ColorDepth.TrueColor;
         }
 
-        // 2. Known truecolor-capable terminal programs (checked BEFORE the 256color TERM
-        //    fallback, since e.g. Windows Terminal sets TERM=xterm-256color yet does truecolor).
+        // Check emulator markers before TERM because some truecolor terminals report xterm-256color.
         if (IsKnownTrueColorTerminal())
         {
             return ColorDepth.TrueColor;
@@ -288,20 +287,17 @@ public sealed class AnsiTerminal : ITerminal
         string? term = Environment.GetEnvironmentVariable("TERM");
         if (term is not null)
         {
-            // 3. TERM itself may advertise truecolor.
             if (term.Contains("truecolor", StringComparison.Ordinal) ||
                 term.Contains("24bit", StringComparison.Ordinal))
             {
                 return ColorDepth.TrueColor;
             }
 
-            // 4. 256-color capable.
             if (term.Contains("256color", StringComparison.Ordinal))
             {
                 return ColorDepth.Ansi256;
             }
 
-            // 5. Basic color, or explicitly dumb/no color.
             if (term.Equals("dumb", StringComparison.Ordinal))
             {
                 return ColorDepth.NoColor;
@@ -313,26 +309,24 @@ public sealed class AnsiTerminal : ITerminal
             }
         }
 
-        // 6. Modern Windows consoles (Terminal / Win10+ conhost) support truecolor.
+        // Modern Windows consoles support truecolor.
         if (TerminalMode.IsWindows)
         {
             return ColorDepth.TrueColor;
         }
 
-        // 7. Conservative default that works nearly everywhere.
+        // Conservative fallback.
         return ColorDepth.Ansi256;
     }
 
     // Recognizes terminal emulators known to support 24-bit color via their marker env vars.
     private static bool IsKnownTrueColorTerminal()
     {
-        // Windows Terminal.
         if (Environment.GetEnvironmentVariable("WT_SESSION") is not null)
         {
             return true;
         }
 
-        // kitty, Alacritty, WezTerm, Konsole set dedicated markers.
         if (Environment.GetEnvironmentVariable("KITTY_WINDOW_ID") is not null)
         {
             return true;
@@ -361,14 +355,12 @@ public sealed class AnsiTerminal : ITerminal
             return true; // gnome-terminal etc. ≥0.36
         }
 
-        // JetBrains IDE terminals (Rider, IntelliJ, ...) — JediTerm supports truecolor.
         if (Environment.GetEnvironmentVariable("TERMINAL_EMULATOR") is { } je &&
             je.Contains("JetBrains", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        // TERM_PROGRAM covers iTerm2, VS Code, WezTerm, Hyper, Tabby — all truecolor.
         string? prog = Environment.GetEnvironmentVariable("TERM_PROGRAM");
         if (prog is "iTerm.app" or "vscode" or "WezTerm" or "Hyper" or "Tabby" or "ghostty")
         {

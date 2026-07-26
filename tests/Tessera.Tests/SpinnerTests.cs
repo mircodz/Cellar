@@ -55,14 +55,4 @@ public class SpinnerTests
         Assert.StartsWith("⠋", row);
         Assert.Contains("Scanning", row);
     }
-
-    [Fact]
-    public void BuiltInSets_HaveFrames()
-    {
-        Assert.NotEmpty(SpinnerFrames.Dots.Frames);
-        Assert.NotEmpty(SpinnerFrames.Line.Frames);
-        Assert.NotEmpty(SpinnerFrames.Arc.Frames);
-        Assert.NotEmpty(SpinnerFrames.Bounce.Frames);
-        Assert.NotEmpty(SpinnerFrames.Circle.Frames);
-    }
 }

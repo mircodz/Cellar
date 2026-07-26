@@ -129,7 +129,7 @@ public class MouseInteractionBenchmarks
             for (int j = 0; j < 3; j++) c.AddChild(0x2000L + rng.Next(0x1000, 0xffffff));
         }
         root.ExpandAll();
-        _tree.Invalidate();
+        _tree.MarkDirty();
         _tree.HasFocus = true;
 
         // A realistic app root: a sidebar list beside the link tree, over a footer button row.

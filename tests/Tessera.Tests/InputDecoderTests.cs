@@ -128,6 +128,34 @@ public class InputDecoderTests
     }
 
     [Fact]
+    public void BracketedPaste_MultibyteSplitAcrossFeeds_IsNotCorrupted()
+    {
+        // "café☕" pasted in two chunks whose split falls inside the é and the ☕ multibyte
+        // sequences. The decoder must not cut mid-sequence (which would yield U+FFFD).
+        var d = new InputDecoder();
+        byte[] all = Encoding.UTF8.GetBytes("\x1b[200~café☕\x1b[201~");
+        int split = 8; // lands inside a multibyte char's bytes
+        d.Feed(all[..split]);
+        var ev = d.Feed(all[split..]);
+        var text = new StringBuilder();
+        foreach (var e in ev)
+        {
+            if (e is PasteEvent p) text.Append(p.Text);
+        }
+        Assert.Equal("café☕", text.ToString());
+        Assert.DoesNotContain('�', text.ToString());
+    }
+
+    [Fact]
+    public void CtrlSpace_IsControlModifiedSpace()
+    {
+        var ev = Decode([0x00]); // NUL = Ctrl-Space / Ctrl-@
+        var k = Assert.IsType<KeyEvent>(Assert.Single(ev));
+        Assert.Equal(KeyModifiers.Control, k.Modifiers);
+        Assert.Equal(" ", k.Rune.ToString());
+    }
+
+    [Fact]
     public void SplitSequence_AcrossFeeds()
     {
         var d = new InputDecoder();

@@ -15,6 +15,8 @@ public sealed class InputDecoder
     private readonly StringBuilder _paste = new();
     private bool _inPaste;
 
+    private static readonly byte[] PasteTerminator = { 0x1b, (byte)'[', (byte)'2', (byte)'0', (byte)'1', (byte)'~' };
+
     /// <summary>Feeds raw bytes and returns any events completed by this chunk.</summary>
     public IReadOnlyList<InputEvent> Feed(ReadOnlySpan<byte> bytes)
     {
@@ -80,14 +82,13 @@ public sealed class InputDecoder
         }
     }
 
-    // ---- Text / control characters ----
-
     private int ConsumeText(List<InputEvent> events)
     {
         byte b = _buffer[0];
 
         switch (b)
         {
+            case 0x00: events.Add(new KeyEvent(Key.Char, new Rune(' '), KeyModifiers.Control)); return 1; // Ctrl-Space / Ctrl-@
             case 0x0d: events.Add(new KeyEvent(Key.Enter, default, KeyModifiers.None)); return 1;
             case 0x0a: events.Add(new KeyEvent(Key.Enter, default, KeyModifiers.None)); return 1;
             case 0x09: events.Add(new KeyEvent(Key.Tab, default, KeyModifiers.None)); return 1;
@@ -103,11 +104,9 @@ public sealed class InputDecoder
             return 1;
         }
 
-        // UTF-8 multibyte decode.
         int len = Utf8SequenceLength(b);
         if (len == 0)
         {
-            // Invalid lead byte; drop it.
             return 1;
         }
         if (_buffer.Count < len)
@@ -153,7 +152,6 @@ public sealed class InputDecoder
         return 0;
     }
 
-    // ---- Escape sequences ----
     // Returns the number of bytes consumed, or 0 if the sequence is incomplete.
 
     private int TryParseEscape(List<InputEvent> events)
@@ -274,7 +272,6 @@ public sealed class InputDecoder
             mods = DecodeModifier(modCode);
         }
 
-        // Arrow / navigation letters.
         Key letterKey = final switch
         {
             (byte)'A' => Key.Up,
@@ -472,10 +469,6 @@ public sealed class InputDecoder
         events.Add(new MouseEvent(kind, button, x, y, mods));
     }
 
-    // ---- Bracketed paste ----
-
-    private static readonly byte[] PasteTerminator = { 0x1b, (byte)'[', (byte)'2', (byte)'0', (byte)'1', (byte)'~' };
-
     private bool ConsumePasteContent(List<InputEvent> events)
     {
         byte[] term = PasteTerminator;
@@ -483,7 +476,6 @@ public sealed class InputDecoder
         {
             if (MatchesAt(term, i))
             {
-                // Flush accumulated paste text.
                 var raw = new byte[i];
                 for (int k = 0; k < i; k++)
                 {
@@ -502,6 +494,12 @@ public sealed class InputDecoder
         // No terminator yet. If a partial terminator might straddle the end, keep those
         // bytes buffered; otherwise fold everything into the paste and clear.
         int safe = Math.Max(0, _buffer.Count - term.Length);
+        // Don't cut in the middle of a multibyte UTF-8 sequence, or the trailing bytes decode
+        // as U+FFFD. Back up to the start of the last code point (a non-continuation byte).
+        while (safe > 0 && (_buffer[safe] & 0xC0) == 0x80)
+        {
+            safe--;
+        }
         if (safe > 0)
         {
             var raw = new byte[safe];

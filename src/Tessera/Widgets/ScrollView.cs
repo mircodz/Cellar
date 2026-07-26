@@ -13,10 +13,10 @@ namespace Tessera.Widgets;
 /// </summary>
 public sealed class ScrollView : Widget
 {
-    private int _offset;          // topmost visible content row
-    private int _contentHeight;   // measured on last render
-    private int _viewportHeight;  // measured on last render
-    private Surface? _buffer;     // reused offscreen render target
+    private int _offset;
+    private int _contentHeight;
+    private int _viewportHeight;
+    private Surface? _buffer;
 
     public Widget Child { get; set; }
 
@@ -31,7 +31,7 @@ public sealed class ScrollView : Widget
     public ScrollView(Widget child) => Child = child;
 
     /// <summary>Current scroll position (topmost visible content row).</summary>
-    public int Offset
+    public int ScrollOffset
     {
         get => _offset;
         set => _offset = Math.Max(0, value);
@@ -102,7 +102,7 @@ public sealed class ScrollView : Widget
             case KeyEvent key when HasFocus:
                 return HandleKey(key);
             case MouseEvent { Kind: MouseEventKind.Wheel } m:
-                Offset += m.Button == MouseButton.WheelUp ? -3 : 3;
+                ScrollOffset += m.Button == MouseButton.WheelUp ? -3 : 3;
                 ClampOffset();
                 return true;
         }
@@ -114,12 +114,12 @@ public sealed class ScrollView : Widget
         int page = Math.Max(1, _viewportHeight - 1);
         switch (key.Key)
         {
-            case Key.Up: Offset -= 1; ClampOffset(); return true;
-            case Key.Down: Offset += 1; ClampOffset(); return true;
-            case Key.PageUp: Offset -= page; ClampOffset(); return true;
-            case Key.PageDown: Offset += page; ClampOffset(); return true;
-            case Key.Home: Offset = 0; return true;
-            case Key.End: Offset = Math.Max(0, _contentHeight - _viewportHeight); return true;
+            case Key.Up: ScrollOffset -= 1; ClampOffset(); return true;
+            case Key.Down: ScrollOffset += 1; ClampOffset(); return true;
+            case Key.PageUp: ScrollOffset -= page; ClampOffset(); return true;
+            case Key.PageDown: ScrollOffset += page; ClampOffset(); return true;
+            case Key.Home: ScrollOffset = 0; return true;
+            case Key.End: ScrollOffset = Math.Max(0, _contentHeight - _viewportHeight); return true;
         }
         return false;
     }

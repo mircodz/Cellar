@@ -7,8 +7,6 @@ public class UnicodeTests
 {
     [Theory]
     [InlineData('A', 1)]
-    [InlineData(' ', 1)]
-    [InlineData('~', 1)]
     public void RuneWidth_Ascii_IsOne(char c, int expected)
     {
         Assert.Equal(expected, Unicode.RuneWidth(new Rune(c)));

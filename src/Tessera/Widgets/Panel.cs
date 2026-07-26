@@ -11,13 +11,15 @@ namespace Tessera.Widgets;
 /// </summary>
 public sealed class Panel : Widget
 {
+    private readonly Border _border = new();
+
     public Widget? Child { get; set; }
     public string? Title { get; set; }
     public BorderStyle BorderStyle { get; set; } = BorderStyle.Rounded;
     public Thickness Padding { get; set; } = new(1, 0);
 
     /// <summary>Border line style. Null uses the theme border color.</summary>
-    public Style? BorderColor { get; set; }
+    public Style? BorderLineStyle { get; set; }
 
     /// <summary>Title style. Null uses the theme accent (bold).</summary>
     public Style? TitleStyle { get; set; }
@@ -55,8 +57,6 @@ public sealed class Panel : Widget
     /// <summary>Reports the child's focusability so containers forward focus in.</summary>
     public override bool IsFocusable => Child?.IsFocusable ?? false;
 
-    private readonly Border _border = new();
-
     public override void Render(Surface surface, Rect area)
     {
         if (area.Width < 2 || area.Height < 2)
@@ -72,7 +72,7 @@ public sealed class Panel : Widget
         _border.Child = null;
         _border.Title = Title;
         _border.BorderStyle = BorderStyle;
-        _border.Style = BorderColor;
+        _border.Style = BorderLineStyle;
         _border.TitleStyle = TitleStyle;
         _border.Render(surface, area);
 

@@ -27,8 +27,6 @@ internal static class TerminalMode
         }
     }
 
-    // ------------------------------------------------------------------ Windows
-
     private static class Windows
     {
         private const int STD_INPUT_HANDLE = -10;
@@ -88,8 +86,6 @@ internal static class TerminalMode
             SetConsoleMode(saved.OutHandle, saved.OutMode);
         }
     }
-
-    // ------------------------------------------------------------------ Unix
 
     // The termios struct and its flag/index constants differ between Linux and the BSD
     // family (macOS). Linux: 4-byte tcflag_t, a c_line byte, NCCS=32. macOS: 8-byte

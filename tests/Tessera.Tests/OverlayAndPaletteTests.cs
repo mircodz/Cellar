@@ -160,7 +160,7 @@ public class CommandPaletteTests
     public void OnRunFiresAfterCommand()
     {
         bool onRun = false;
-        var palette = new CommandPalette { OnRun = () => onRun = true };
+        var palette = new CommandPalette { OnAfterRun = () => onRun = true };
         palette.Add("X", () => { });
         palette.HasFocus = true;
         palette.OnEvent(K(Key.Enter));
@@ -209,5 +209,18 @@ public class CommandPaletteTests
         }));
         Assert.Contains("First Command", all);
         Assert.Contains("Second Command", all);
+    }
+
+    [Fact]
+    public void Render_TitleWithSupplementaryUnicode_DoesNotThrow()
+    {
+        var palette = new CommandPalette().Add("Open 🚀", () => { });
+        var surface = new Surface(40, 6);
+
+        palette.Render(surface, surface.Bounds);
+
+        Assert.Contains(Enumerable.Range(0, surface.Height)
+            .SelectMany(y => Enumerable.Range(0, surface.Width).Select(x => surface.Get(x, y))),
+            cell => cell.Grapheme == "🚀");
     }
 }

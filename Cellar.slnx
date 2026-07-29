@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Cellar.Benchmarks/Cellar.Benchmarks.csproj" />
+    <Project Path="src/Cellar.Demo/Cellar.Demo.csproj" />
+    <Project Path="src/Cellar/Cellar.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cellar.Tests/Cellar.Tests.csproj" />
+  </Folder>
+</Solution>

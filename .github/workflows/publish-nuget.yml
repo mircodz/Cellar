@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERSION_FILE: version
-      PROJECT: src/Tessera/Tessera.csproj
+      PROJECT: src/Cellar/Cellar.csproj
       OUT_DIR: artifacts/nupkg
       OWNER: ${{ github.repository_owner }}
     steps:

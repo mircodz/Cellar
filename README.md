@@ -1,6 +1,6 @@
-# Tessera
+# Cellar
 
-Tessera is a retained-mode terminal UI framework for .NET 8. It provides cell-diffed ANSI
+Cellar is a retained-mode terminal UI framework for .NET 8. It provides cell-diffed ANSI
 rendering, styled text, constraint-based layouts, themes, mouse and keyboard input, and a
 collection of interactive widgets.
 
@@ -9,21 +9,21 @@ collection of interactive widgets.
 ## Install
 
 ```sh
-dotnet add package Tessera
+dotnet add package Cellar
 ```
 
 ## Quick start
 
 ```csharp
-using Tessera.Layout;
-using Tessera.Terminal;
-using Tessera.Widgets;
+using Cellar.Layout;
+using Cellar.Terminal;
+using Cellar.Widgets;
 
 using var terminal = new AnsiTerminal();
 using var app = new App(terminal);
 
 app.Root = new Stack(Direction.Vertical)
-    .Add(new Panel(new Label("Hello, Tessera!"), " Welcome "), Constraint.Fill())
+    .Add(new Panel(new Label("Hello, Cellar!"), " Welcome "), Constraint.Fill())
     .Add(new Label("Press q to quit"), Constraint.Length(1));
 
 app.OnEvent = input =>

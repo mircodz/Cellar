@@ -1,0 +1,6 @@
+# Normalize line endings. C# sources use CRLF to match the rest of the tree.
+*.cs text eol=crlf
+*.csproj text eol=crlf
+*.slnx text eol=crlf
+*.md text eol=lf
+*.yml text eol=lf

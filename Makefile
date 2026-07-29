@@ -2,8 +2,8 @@
 
 # Variables
 VERSION := $(shell cat version)
-SLN := Tessera.slnx
-LIB := src/Tessera/Tessera.csproj
+SLN := Cellar.slnx
+LIB := src/Cellar/Cellar.csproj
 NUPKG_DIR := ./nupkgs
 
 help: ## Show this help message
@@ -28,12 +28,12 @@ coverage: ## Run tests with coverage report
 		/p:CoverletOutput=./TestResults/
 
 run: ## Run the interactive demo gallery
-	dotnet run --project src/Tessera.Demo
+	dotnet run --project src/Cellar.Demo
 
 demo: run ## Alias for `run`
 
 bench: ## Run the benchmark suite (Release)
-	dotnet run -c Release --project src/Tessera.Benchmarks -- --filter '*'
+	dotnet run -c Release --project src/Cellar.Benchmarks -- --filter '*'
 
 clean: ## Clean build artifacts
 	dotnet clean $(SLN) || true
@@ -43,7 +43,7 @@ clean: ## Clean build artifacts
 pack: clean build-release ## Pack the NuGet package
 	dotnet pack $(LIB) -c Release -o $(NUPKG_DIR)
 	@echo ""
-	@echo "Package created: $(NUPKG_DIR)/Tessera.$(VERSION).nupkg"
+	@echo "Package created: $(NUPKG_DIR)/Cellar.$(VERSION).nupkg"
 
 setup: ## Initial setup (restore packages)
 	dotnet restore

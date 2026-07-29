@@ -1,0 +1,17 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:suggestion
+
+[*.{md,yml,yaml}]
+end_of_line = lf
+indent_size = 2

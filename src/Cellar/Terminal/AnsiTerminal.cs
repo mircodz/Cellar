@@ -16,6 +16,8 @@ public sealed class AnsiTerminal : ITerminal
 {
     private readonly Stream _stdout;
     private readonly Stream _stdin;
+    private readonly Encoding _inputEncoding;
+    private readonly Encoding _outputEncoding;
     private object? _savedMode;
     private bool _rawActive;
     private bool _disposed;
@@ -34,10 +36,30 @@ public sealed class AnsiTerminal : ITerminal
 
     public AnsiTerminal()
     {
-        _stdout = Console.OpenStandardOutput();
-        _stdin = OpenStdin();
-        ColorDepth = DetectColorDepth();
-        _lastSize = Size;
+        _inputEncoding = Console.InputEncoding;
+        _outputEncoding = Console.OutputEncoding;
+        bool initialized = false;
+        try
+        {
+            // Windows console streams choose their byte/UTF-16 path when opened.
+            Console.InputEncoding = new UTF8Encoding(false);
+            Console.OutputEncoding = new UTF8Encoding(false);
+            _stdout = Console.OpenStandardOutput();
+            _stdin = OpenStdin();
+            ColorDepth = DetectColorDepth();
+            _lastSize = Size;
+
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            Console.CancelKeyPress += OnCancelKeyPress;
+            initialized = true;
+        }
+        finally
+        {
+            if (!initialized)
+            {
+                ReleaseConsole();
+            }
+        }
     }
 
     // On Unix, Console.OpenStandardInput() routes through .NET's console layer, which keeps its
@@ -95,10 +117,6 @@ public sealed class AnsiTerminal : ITerminal
 
         _savedMode = TerminalMode.Enter();
         _rawActive = true;
-
-        // Ensure restoration even on abnormal termination.
-        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
-        Console.CancelKeyPress += OnCancelKeyPress;
 
         Write(Ansi.EnterAltScreen);
         Write(Ansi.HideCursor);
@@ -164,22 +182,29 @@ public sealed class AnsiTerminal : ITerminal
 
         StopResizeWatch();
 
-        Write(Ansi.DisableBracketedPaste);
-        Write(Ansi.DisableMouse);
-        Write(Ansi.ShowCursor);
-        Write(Ansi.Reset);
-        Write(Ansi.LeaveAltScreen);
-
-        if (_savedMode is not null)
+        try
         {
-            TerminalMode.Restore(_savedMode);
+            Write(Ansi.DisableBracketedPaste);
+            Write(Ansi.DisableMouse);
+            Write(Ansi.ShowCursor);
+            Write(Ansi.Reset);
+            Write(Ansi.LeaveAltScreen);
         }
-
-        _savedMode = null;
-        _rawActive = false;
-
-        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
-        Console.CancelKeyPress -= OnCancelKeyPress;
+        finally
+        {
+            try
+            {
+                if (_savedMode is not null)
+                {
+                    TerminalMode.Restore(_savedMode);
+                }
+            }
+            finally
+            {
+                _savedMode = null;
+                _rawActive = false;
+            }
+        }
     }
 
     public void Write(string ansi)
@@ -256,8 +281,29 @@ public sealed class AnsiTerminal : ITerminal
 
     private void SafeRestore()
     {
-        try { LeaveRawMode(); }
+        try { Dispose(); }
         catch { /* best effort on teardown */ }
+    }
+
+    private void ReleaseConsole()
+    {
+        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        Console.CancelKeyPress -= OnCancelKeyPress;
+        try
+        {
+            _stdin?.Dispose(); // closes the dup'd fd on Unix
+        }
+        finally
+        {
+            try
+            {
+                Console.InputEncoding = _inputEncoding;
+            }
+            finally
+            {
+                Console.OutputEncoding = _outputEncoding;
+            }
+        }
     }
 
     private static ColorDepth DetectColorDepth()
@@ -390,7 +436,13 @@ public sealed class AnsiTerminal : ITerminal
         }
 
         _disposed = true;
-        SafeRestore();
-        _stdin.Dispose(); // closes the dup'd fd on Unix
+        try
+        {
+            LeaveRawMode();
+        }
+        finally
+        {
+            ReleaseConsole();
+        }
     }
 }

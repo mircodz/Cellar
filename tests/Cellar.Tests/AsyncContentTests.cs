@@ -169,4 +169,23 @@ public class AsyncContentTests
         Assert.Contains("ASYNCDONE", RowText(s, 0));
         await Task.CompletedTask;
     }
+
+    [Fact]
+    public void FocusGivenWhileLoading_ReachesTheBuiltContent()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var built = new Table();
+        var ac = new AsyncContent(_ => { gate.Wait(2000); return built; });
+        var s = new Surface(20, 2);
+        RenderOnce(ac, s); // starts the work
+
+        ac.HasFocus = true; // before the content exists
+        Assert.True(ac.HasFocus);
+        gate.Set();
+        Assert.True(WaitLoaded(ac, s));
+        Assert.True(built.HasFocus);
+
+        ac.HasFocus = false;
+        Assert.False(built.HasFocus);
+    }
 }

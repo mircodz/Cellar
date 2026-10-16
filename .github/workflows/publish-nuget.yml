@@ -1,15 +1,19 @@
-name: Publish NuGet
+name: Release
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
   packages: write
 
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
-  pack-and-push:
+  tag-and-publish:
     if: github.actor == 'mircodz'
     environment: publish
     runs-on: ubuntu-latest
@@ -19,8 +23,32 @@ jobs:
       OUT_DIR: artifacts/nupkg
       OWNER: ${{ github.repository_owner }}
     steps:
+      - name: Ensure main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "Releases are published from main; this run is on ${GITHUB_REF}." >&2
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        run: |
+          version="$(tr -d '[:space:]' < "$VERSION_FILE")"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version '$version'. Expected MAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+          printf 'VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+
+      - name: Ensure tag does not already exist
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$VERSION"; then
+            echo "Tag $VERSION already exists. Bump the version file." >&2
+            exit 1
+          fi
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -30,18 +58,20 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Ensure tagged release
-        if: github.ref_type != 'tag'
+      - name: Build and test
         run: |
-          echo "This workflow can only run on tags." >&2
-          exit 1
-
-      - name: Read version
-        id: version
-        run: echo "VERSION=$(cat $VERSION_FILE)" >> "$GITHUB_OUTPUT"
+          dotnet build -c Release --no-restore
+          dotnet test -c Release --no-build
 
       - name: Pack
-        run: dotnet pack $PROJECT -c Release -o $OUT_DIR /p:Version=${{ steps.version.outputs.VERSION }}
+        run: dotnet pack "$PROJECT" -c Release --no-build -o "$OUT_DIR" /p:Version="$VERSION"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ${{ env.OUT_DIR }}/
+          if-no-files-found: error
 
       - name: NuGet login
         id: nuget_login
@@ -64,4 +94,12 @@ jobs:
           dotnet nuget push "$OUT_DIR"/*.nupkg \
             --source "https://nuget.pkg.github.com/${OWNER}/index.json" \
             --api-key "$GITHUB_TOKEN" \
-            --skip-duplicate
+            --skip-duplicate \
+            --no-symbols
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "refs/tags/$VERSION"

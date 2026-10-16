@@ -109,8 +109,18 @@ public sealed class App : IDisposable
     /// <summary>Invoked for every input event; return true if handled. Any event marks the UI dirty.</summary>
     public Func<InputEvent, bool>? OnEvent { get; set; }
 
+    /// <summary>Invoked for an input event nothing else handled: no overlay, <see cref="OnEvent"/>, or the root. For
+    /// app-wide keys that mustn't take a key from the focused widget, such as q to quit while a text box may want
+    /// it. Return true if handled.</summary>
+    public Func<InputEvent, bool>? OnUnhandledEvent { get; set; }
+
     /// <summary>Invoked for each user-posted message (anything that isn't an input event).</summary>
     public Action<object>? OnMessage { get; set; }
+
+    /// <summary>Invoked when handling an input event or a message throws. Return true to keep running, for example
+    /// after showing the error in an overlay; return false, or leave this unset, to end <see cref="RunAsync"/> with
+    /// the exception. An exception while rendering always ends it, since the next frame would throw again.</summary>
+    public Func<Exception, bool>? OnError { get; set; }
 
     /// <summary>Frame cap; the screen is flushed at most this often when dirty.</summary>
     public TimeSpan FrameInterval { get; set; } = TimeSpan.FromMilliseconds(16); // ~60fps
@@ -336,27 +346,35 @@ public sealed class App : IDisposable
             ExceptionDispatchInfo.Capture(failure.Error).Throw();
         }
 
-        if (msg is ResizeEvent resize)
+        _dirty = true;
+        try
         {
-            var newSize = new Size(resize.Width, resize.Height);
-            if (newSize != _size)
+            if (msg is ResizeEvent resize)
             {
-                _size = newSize;
-                _screen.Resize(newSize.Width, newSize.Height);
+                var newSize = new Size(resize.Width, resize.Height);
+                if (newSize != _size)
+                {
+                    _size = newSize;
+                    _screen.Resize(newSize.Width, newSize.Height);
+                }
+                OnEvent?.Invoke(resize);
+                Root?.OnEvent(resize);
             }
-            OnEvent?.Invoke(resize);
-            Root?.OnEvent(resize);
-            _dirty = true;
+            else if (msg is InputEvent input)
+            {
+                DispatchInput(input);
+            }
+            else
+            {
+                OnMessage?.Invoke(msg);
+            }
         }
-        else if (msg is InputEvent input)
+        catch (Exception error) when (OnError is not null)
         {
-            DispatchInput(input);
-            _dirty = true;
-        }
-        else
-        {
-            OnMessage?.Invoke(msg);
-            _dirty = true;
+            if (!OnError(error))
+            {
+                throw;
+            }
         }
     }
 
@@ -390,6 +408,10 @@ public sealed class App : IDisposable
         if (!appHandled)
         {
             appHandled = Root?.OnEvent(input) ?? false;
+        }
+        if (!appHandled)
+        {
+            appHandled = OnUnhandledEvent?.Invoke(input) ?? false;
         }
 
         if (!appHandled && MouseSelectionEnabled && input is MouseEvent m)

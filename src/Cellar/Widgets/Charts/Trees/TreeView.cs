@@ -71,7 +71,8 @@ public sealed class TreeView<T> : Widget
     /// <summary>Raised when the selected node changes.</summary>
     public Action<TreeNode<T>>? OnSelect { get; set; }
 
-    /// <summary>Raised when a node is activated (Enter or double-context use).</summary>
+    /// <summary>Raised when a node is activated with Enter. When set, Enter only activates: it doesn't also toggle the
+    /// node, which would leave it collapsed or expanded when the user comes back. Space and ←/→ still toggle.</summary>
     public Action<TreeNode<T>>? OnActivate { get; set; }
 
     public override bool IsFocusable => true;
@@ -149,12 +150,17 @@ public sealed class TreeView<T> : Widget
         ClearLinks();
 
         int rows = Math.Min(rowsHeight, _flat.Count - _scroll);
+        int selectedY = -1;
         for (int i = 0; i < rows; i++)
         {
             int flatIndex = _scroll + i;
             var row = _flat[flatIndex];
             int y = rowsTop + i;
             bool selected = flatIndex == _selected;
+            if (selected)
+            {
+                selectedY = y;
+            }
             bool striped = !selected && Striped && (flatIndex & 1) == 1;
 
             Style? rowBg = null;
@@ -212,7 +218,7 @@ public sealed class TreeView<T> : Widget
             }
         }
 
-        DrawHoverEmphasis(surface);
+        DrawHoverEmphasis(surface, selectedY);
     }
 
     // Total width reserved by the metric column band (widths + inter-column spacing).
@@ -423,8 +429,15 @@ public sealed class TreeView<T> : Widget
                 var node = SelectedNode;
                 if (node is not null)
                 {
-                    if (node.HasChildren) { node.Toggle(); _dirty = true; }
-                    OnActivate?.Invoke(node);
+                    if (OnActivate is { } activate)
+                    {
+                        activate(node);
+                    }
+                    else if (node.HasChildren)
+                    {
+                        node.Toggle();
+                        _dirty = true;
+                    }
                 }
                 return true;
         }

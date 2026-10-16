@@ -32,3 +32,21 @@ internal sealed class MountProbe : Widget
 
     public override void Render(Rendering.Surface surface, Rect area) { }
 }
+
+// A leaf widget that handles one key and counts how often it saw it.
+internal sealed class KeySink(Key key) : Widget
+{
+    public int Seen { get; private set; }
+
+    public override void Render(Rendering.Surface surface, Rect area) { }
+
+    public override bool OnEvent(InputEvent e)
+    {
+        if (e is KeyEvent k && k.Key == key)
+        {
+            Seen++;
+            return true;
+        }
+        return false;
+    }
+}

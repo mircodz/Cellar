@@ -38,6 +38,9 @@ public sealed class AsyncContent : Widget, IDisposable
     private int _started;
     private bool _disposed;
 
+    // Focus requested before the content exists; applied when it's published and kept in sync on render.
+    private volatile bool _wantsFocus;
+
     // The app captured at mount, used to mount the produced child once it is published (so a nested
     // Spinner/AsyncContent inside the loaded widget starts its own lifecycle). Volatile: written on
     // the UI thread at mount, read by the worker at publish. Null if not mounted yet.
@@ -109,6 +112,11 @@ public sealed class AsyncContent : Widget, IDisposable
 
     public override void Render(Surface surface, Rect area)
     {
+        // Focus may have changed between Publish reading it and the content becoming visible.
+        if (_loaded is { } loaded && loaded.HasFocus != _wantsFocus)
+        {
+            loaded.HasFocus = _wantsFocus;
+        }
         EnsureStarted();
         Current.Render(surface, area);
     }
@@ -120,12 +128,14 @@ public sealed class AsyncContent : Widget, IDisposable
         return _loaded?.OnEvent(e) ?? false;
     }
 
-    /// <summary>Focus flows to the loaded child once ready; while loading there is nothing focusable.</summary>
+    /// <summary>Focus flows to the loaded child once ready. Focus given while loading is remembered and passed on
+    /// when the content arrives, so a view built in the background is focused like any other.</summary>
     public override bool HasFocus
     {
-        get => _loaded?.HasFocus ?? false;
+        get => _loaded?.HasFocus ?? _wantsFocus;
         set
         {
+            _wantsFocus = value;
             if (_loaded is { } loaded)
             {
                 loaded.HasFocus = value;
@@ -181,6 +191,7 @@ public sealed class AsyncContent : Widget, IDisposable
             widget.Mount(app);
         }
 
+        widget.HasFocus = _wantsFocus; // not reachable by the UI thread until published below
         _loaded = widget;   // volatile publish — the render thread sees a fully-constructed widget
         Repaint.Request();  // coalesced, thread-safe; wakes the loop to paint the swap
     }

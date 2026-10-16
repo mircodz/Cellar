@@ -184,6 +184,11 @@ public sealed class FlameGraph<T> : Widget
                 return true;
             case Key.Backspace:
             case Key.Escape:
+                // At the root there is nothing to zoom out of: leave the key to the screen (e.g. to go back).
+                if (_zoom?.Parent is null)
+                {
+                    return false;
+                }
                 ZoomOut();
                 return true;
             case Key.Up:

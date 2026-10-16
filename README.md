@@ -26,7 +26,8 @@ app.Root = new Stack(Direction.Vertical)
     .Add(new Panel(new Label("Hello, Cellar!"), " Welcome "), Constraint.Fill())
     .Add(new Label("Press q to quit"), Constraint.Length(1));
 
-app.OnEvent = input =>
+// Gets the keys no widget handled, so q still reaches a focused text box.
+app.OnUnhandledEvent = input =>
 {
     if (input is KeyEvent { IsChar: true } key && key.Rune.Value == 'q')
     {

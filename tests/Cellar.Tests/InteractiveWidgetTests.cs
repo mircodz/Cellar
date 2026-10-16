@@ -246,4 +246,30 @@ public class InteractiveWidgetTests
         var backgrounds = Enumerable.Range(0, 5).Select(y => s.Get(19, y).Style.Background).ToHashSet();
         Assert.True(backgrounds.Count >= 2, "scrollbar should show distinct thumb and track backgrounds");
     }
+
+    [Fact]
+    public void Tabs_ShiftTabSelectsThePreviousTab()
+    {
+        var tabs = new Tabs { HasFocus = true }
+            .Add("a", new Label("A"))
+            .Add("b", new Label("B"))
+            .Add("c", new Label("C"));
+        Assert.True(tabs.OnEvent(new KeyEvent(Key.Tab, default, KeyModifiers.Shift)));
+        Assert.Equal(2, tabs.ActiveIndex); // wraps from the first tab to the last
+        tabs.OnEvent(new KeyEvent(Key.Tab, default, KeyModifiers.None));
+        Assert.Equal(0, tabs.ActiveIndex);
+    }
+
+    [Fact]
+    public void Tabs_ArrowKeysCanBeLeftToTheContent()
+    {
+        var tabs = new Tabs { HasFocus = true, ArrowKeysSwitch = false }
+            .Add("a", new Label("A"))
+            .Add("b", new Label("B"));
+        Assert.False(tabs.OnEvent(new KeyEvent(Key.Right, default, KeyModifiers.None)));
+        Assert.False(tabs.OnEvent(new KeyEvent(Key.Left, default, KeyModifiers.None)));
+        Assert.Equal(0, tabs.ActiveIndex);
+        Assert.True(tabs.OnEvent(new KeyEvent(Key.Tab, default, KeyModifiers.None)));
+        Assert.Equal(1, tabs.ActiveIndex);
+    }
 }

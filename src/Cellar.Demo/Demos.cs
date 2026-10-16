@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Cellar.Layout;
 using Cellar.Primitives;
 using Cellar.Text;
@@ -14,13 +15,19 @@ namespace Cellar.Demo;
 /// <summary>One frame in the tree demo: a name, self time, share, and a synthetic heap address.</summary>
 internal readonly record struct TraceFrame(string Name, double Ms, double Percent, long Addr = 0);
 
+/// <summary>One row of the table demo: where something allocates, and how much.</summary>
+internal sealed record AllocationSite(string Type, string Method, string Allocator, double MiB, int Count, double OwnPercent)
+{
+    public string Location => $"{Type}.{Method}";
+}
+
 // The catalog registry + one free function per widget family. Each function is self-contained:
 // it owns its widgets, and live ones subscribe to ctx.Tick to animate.
 internal static class Demos
 {
     public static readonly IReadOnlyList<Demo> All =
     [
-        new("Table", "sortable, striped, selectable rows", Table),
+        new("Table", "rows as objects: styled cells, sort by value, filter", Table),
         new("Tree", "collapsible, lazy, clickable links", Tree),
         new("Tabs", "tabbed container with a lens bar", TabsDemo),
         new("Dashboard", "many widgets composed on one page", Dashboard),
@@ -44,27 +51,77 @@ internal static class Demos
 
     // ---- Data widgets ----
 
+    // A Table<T>: each row is an object. Columns draw their cells as styled text and sort by the row's
+    // values (Count shows "1,204" but sorts as a number), and the callbacks get the row itself, wherever
+    // sorting or filtering moved it. SetRows replaces the rows and keeps the sort.
     private static Widget Table(DemoContext ctx)
     {
-        var t = MakeTable(("Location", Constraint.Fill(3), false), ("Allocator", Constraint.Fill(2), false),
-            ("MiB", Constraint.Length(10), true), ("Count", Constraint.Length(9), true), ("Own%", Constraint.Length(7), true));
         var rng = new Random(7);
-        string[] methods = { "Parse", "Serialize", "Compile", "Read", "Encode", "Match", "Build", "Hash" };
-        string[] allocs = { "GC.Allocate", "new byte[]", "String.Concat", "List.Add", "Box" };
+        string[] types = { "Parser", "Serializer", "Compiler", "Reader", "Encoder", "Matcher", "Builder", "Hasher" };
+        string[] methods = { "Parse", "Write", "Emit", "Read", "Encode", "Match", "Build", "Hash" };
+        string[] allocators = { "GC.Allocate", "new byte[]", "String.Concat", "List.Add", "Box" };
+        var sites = new List<AllocationSite>();
         for (int i = 0; i < 60; i++)
         {
-            double mib = rng.NextDouble() * 200;
-            t.Rows.Add(new[]
-            {
-                $"Frame.{methods[i % methods.Length]}_{i}",
-                allocs[i % allocs.Length],
-                mib.ToString("0.0", CultureInfo.InvariantCulture),
-                (rng.Next(1, 9000)).ToString("N0", CultureInfo.InvariantCulture),
-                (rng.NextDouble() * 100).ToString("0.0", CultureInfo.InvariantCulture),
-            });
+            sites.Add(new AllocationSite(types[i % types.Length], $"{methods[i % methods.Length]}_{i}",
+                allocators[i % allocators.Length], rng.NextDouble() * 200, rng.Next(1, 9000), rng.NextDouble() * 100));
         }
-        t.HasFocus = true;
-        return Padded(t);
+
+        var hint = new StyledText("type to filter · click a header to sort · click the selected row again to open it",
+            Theme.Current.MutedStyle);
+        var status = new Label(hint);
+        var table = new Table<AllocationSite>
+        {
+            ShowHeader = true,
+            Striped = true,
+            ShowScrollbar = true,
+            Sortable = true,
+            OnSelect = site => status.Content = StyledText.Of("selected ").Fg(Theme.Current.Muted)
+                .Append(site.Location).Fg(Theme.Current.Foreground),
+            OnActivate = site => status.Content = StyledText.Of("→ opened ").Fg(Theme.Current.Muted)
+                .Append(site.Location).Bold().Fg(Theme.Current.Accent)
+                .Append(FormattableString.Invariant($"  {site.MiB:0.0} MiB in {site.Count:N0} allocations")).Fg(Theme.Current.Muted),
+        };
+
+        // Shares above 60% are hot, above 30% warm.
+        static Style Heat(double share) => new(
+            share > 0.6 ? Theme.Current.Error : share > 0.3 ? Theme.Current.Warning : Theme.Current.Success, Color.Default);
+
+        // No SortKey: sorts by the cell's text.
+        table.Columns.Add(new TableColumn<AllocationSite>("Location", Constraint.Fill(3),
+            site => StyledText.Of(site.Type + ".").Fg(Theme.Current.Muted).Append(site.Method).Fg(Theme.Current.Accent)));
+        table.Columns.Add(new TableColumn<AllocationSite>("Allocator", Constraint.Fill(2),
+            site => new StyledText(site.Allocator, Theme.Current.MutedStyle)));
+        table.Columns.Add(new TableColumn<AllocationSite>("MiB", Constraint.Length(10),
+            site => new StyledText(site.MiB.ToString("0.0", CultureInfo.InvariantCulture), Heat(site.MiB / 200)), Justify.Right)
+        {
+            SortKey = site => site.MiB,
+        });
+        table.Columns.Add(new TableColumn<AllocationSite>("Count", Constraint.Length(9),
+            site => site.Count.ToString("N0", CultureInfo.InvariantCulture), Justify.Right)
+        {
+            SortKey = site => site.Count,
+        });
+        table.Columns.Add(new TableColumn<AllocationSite>("Own%", Constraint.Length(7),
+            site => new StyledText(site.OwnPercent.ToString("0.0", CultureInfo.InvariantCulture), Heat(site.OwnPercent / 100)), Justify.Right)
+        {
+            SortKey = site => site.OwnPercent,
+        });
+        table.SetRows(sites);
+
+        var filter = new Input { Placeholder = "filter by location…" };
+        filter.OnChange = query =>
+        {
+            table.SetRows(sites.Where(site => site.Location.Contains(query, StringComparison.OrdinalIgnoreCase)));
+            status.Content = hint;
+        };
+
+        var body = new Stack(Direction.Vertical)
+            .Add(new Panel(filter), Constraint.Length(3))
+            .Add(table, Constraint.Fill())
+            .Add(new Padding(status, new Thickness(1, 0)), Constraint.Length(1));
+        body.HasFocus = true;
+        return Padded(body);
     }
 
     private static Widget Tree(DemoContext ctx)
@@ -125,7 +182,7 @@ internal static class Demos
 
     private static Widget TabsDemo(DemoContext ctx) =>
         Padded(new Tabs()
-            .Add("Overview", CenteredNote("Tab 1 — Left/Right or 1-9 to switch"))
+            .Add("Overview", CenteredNote("Tab 1 — Tab/Shift+Tab, Left/Right, or 1-9 to switch"))
             .Add("Details", CenteredNote("Tab 2 — each tab holds its own widget"))
             .Add("Settings", CenteredNote("Tab 3 — the active tab keeps focus")));
 
@@ -543,17 +600,6 @@ internal static class Demos
 
     // ---- helpers ----
 
-    private static Table MakeTable(params (string Header, Constraint Width, bool Right)[] columns)
-    {
-        var t = new Table { ShowHeader = true, SelectedIndex = 0, Striped = true, ShowScrollbar = true, Sortable = true };
-        foreach (var (header, width, right) in columns)
-        {
-            t.Columns.Add(new Column(header, width, right ? Justify.Right : Justify.Left)
-                { SortKey = right ? s => ParseNum(s) : null });
-        }
-        return t;
-    }
-
     private static Widget Padded(Widget w) => new Padding(w, new Thickness(1, 1));
 
     private static Widget CenteredNote(string text) =>
@@ -564,8 +610,4 @@ internal static class Demos
             .Add(new Label(new StyledText(name.PadRight(10), Theme.Current.MutedStyle)), Constraint.Length(11))
             .Add(bar, Constraint.Fill());
 
-    private static double ParseNum(string s)
-    {
-        return double.TryParse(s.Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out double v) ? v : 0;
-    }
 }

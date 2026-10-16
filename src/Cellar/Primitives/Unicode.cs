@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 
@@ -6,7 +7,8 @@ namespace Cellar.Primitives;
 
 /// <summary>
 /// Terminal display-width for Unicode text (a wcwidth port): most scalars are 1 cell,
-/// East-Asian Wide/Fullwidth are 2, and combining/control/format marks are 0.
+/// East-Asian Wide/Fullwidth are 2, and combining and format marks are 0. Control characters
+/// are 1: they're never written to the terminal, but drawn as a visible stand-in (<see cref="Printable"/>).
 /// </summary>
 public static class Unicode
 {
@@ -19,13 +21,9 @@ public static class Unicode
         {
             return 1;
         }
-        if (cp == 0)
+        if (IsControl(cp))
         {
-            return 0;
-        }
-        if (cp < 32 || (cp >= 0x7f && cp < 0xa0)) // C0/C1 controls
-        {
-            return 0;
+            return 1;
         }
         if (IsZeroWidth(cp))
         {
@@ -55,18 +53,8 @@ public static class Unicode
         int i = 0;
         while (i < text.Length)
         {
-            char c = text[i];
-            Rune rune;
-            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-            {
-                rune = new Rune(c, text[i + 1]);
-                i += 2;
-            }
-            else
-            {
-                rune = new Rune(c);
-                i += 1;
-            }
+            Rune.DecodeFromUtf16(text[i..], out Rune rune, out int length); // U+FFFD for an unpaired surrogate
+            i += length;
 
             int w = RuneWidth(rune);
             // A following VS16 promotes a text-presentation base to 2-cell emoji width.
@@ -102,6 +90,69 @@ public static class Unicode
         }
         return width;
     }
+
+    /// <summary>What is drawn for <paramref name="rune"/>. The terminal would act on a control character instead of
+    /// showing it (ESC starts an escape sequence, CR moves the cursor), so C0 controls and DEL are drawn as their
+    /// Control Pictures glyph (ESC as ␛), C1 controls as U+FFFD, and a tab as a space. Anything else is itself.</summary>
+    public static Rune Printable(Rune rune)
+    {
+        int cp = rune.Value;
+        if (!IsControl(cp))
+        {
+            return rune;
+        }
+        return cp switch
+        {
+            '\t' => new Rune(' '),
+            < 0x20 => new Rune(0x2400 + cp),
+            0x7f => new Rune(0x2421),
+            _ => Rune.ReplacementChar,
+        };
+    }
+
+    /// <summary>Whether <paramref name="cp"/> is a bidi control: LRM, RLM, ALM, or an embedding, override, or
+    /// isolate. They're invisible, but a bidi-aware terminal reorders the text after them, so they're never drawn.</summary>
+    public static bool IsBidiControl(int cp) =>
+        cp is 0x061c or 0x200e or 0x200f or (>= 0x202a and <= 0x202e) or (>= 0x2066 and <= 0x2069);
+
+    /// <summary>Makes text safe to write to the terminal: control characters become what <see cref="Printable"/>
+    /// draws for them, bidi controls are dropped, and unpaired surrogates become U+FFFD. Returns
+    /// <paramref name="text"/> itself when it's already safe.</summary>
+    public static string Sanitize(string text)
+    {
+        var span = text.AsSpan();
+        int safe = 0;
+        while (safe < span.Length)
+        {
+            if (Rune.DecodeFromUtf16(span[safe..], out Rune rune, out int length) != OperationStatus.Done ||
+                IsControl(rune.Value) || IsBidiControl(rune.Value))
+            {
+                break;
+            }
+            safe += length;
+        }
+        if (safe == span.Length)
+        {
+            return text;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        builder.Append(span[..safe]);
+        Span<char> utf16 = stackalloc char[2];
+        for (int i = safe; i < span.Length;)
+        {
+            Rune.DecodeFromUtf16(span[i..], out Rune rune, out int length); // U+FFFD for an unpaired surrogate
+            i += length;
+            if (!IsBidiControl(rune.Value))
+            {
+                builder.Append(utf16[..Printable(rune).EncodeToUtf16(utf16)]);
+            }
+        }
+        return builder.ToString();
+    }
+
+    // C0 controls, DEL, and C1 controls.
+    private static bool IsControl(int cp) => cp < 0x20 || (cp >= 0x7f && cp < 0xa0);
 
     private static bool IsZeroWidth(int cp)
     {

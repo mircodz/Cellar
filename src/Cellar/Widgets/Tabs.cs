@@ -46,8 +46,8 @@ public sealed class Tab
 }
 
 /// <summary>
-/// A tabbed container: a one-line tab bar above the active tab's content. Left/Right (or
-/// Shift+Tab/Tab) cycle, number keys 1-9 jump, a click selects. The bar is drawn by
+/// A tabbed container: a one-line tab bar above the active tab's content. Tab/Shift+Tab (and Left/Right, unless
+/// <see cref="ArrowKeysSwitch"/> is off) cycle, number keys 1-9 jump, a click selects. The bar is drawn by
 /// <see cref="RenderBar"/>, kept separate from selection logic so it could move behind an
 /// <c>ITabsRenderer</c> later.
 /// </summary>
@@ -60,6 +60,11 @@ public sealed class Tabs : Widget
     private App? _app;
 
     public List<Tab> Items { get; } = new();
+
+    /// <summary>Whether Left/Right switch tabs when the content doesn't use them. On by default. Turn it off when
+    /// some views use the arrows (trees, flame graphs) and others don't (tables): otherwise the arrows switch tabs
+    /// in some views only. Tab/Shift+Tab and 1-9 always switch.</summary>
+    public bool ArrowKeysSwitch { get; set; } = true;
 
     /// <summary>Records each tab header's x-range on the last render, for click hit-testing.</summary>
     private readonly List<(int start, int end, int index)> _hitRects = new();
@@ -224,11 +229,16 @@ public sealed class Tabs : Widget
     {
         switch (key.Key)
         {
+            case Key.Tab when (key.Modifiers & KeyModifiers.Shift) != 0:
+                ActiveIndex = (_active - 1 + Items.Count) % Math.Max(1, Items.Count);
+                return true;
             case Key.Tab:
-            case Key.Right:
                 ActiveIndex = (_active + 1) % Math.Max(1, Items.Count);
                 return true;
-            case Key.Left:
+            case Key.Right when ArrowKeysSwitch:
+                ActiveIndex = (_active + 1) % Math.Max(1, Items.Count);
+                return true;
+            case Key.Left when ArrowKeysSwitch:
                 ActiveIndex = (_active - 1 + Items.Count) % Math.Max(1, Items.Count);
                 return true;
         }

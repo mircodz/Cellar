@@ -16,7 +16,7 @@ public enum Justify { Left, Center, Right, Fill }
 public static class TextRenderer
 {
     /// <summary>Wraps <paramref name="text"/> to <paramref name="width"/> columns, one
-    /// <see cref="StyledText"/> per line (at spaces; over-long words are hard-split).</summary>
+    /// <see cref="StyledText"/> per line (at spaces and line breaks; over-long words are hard-split).</summary>
     public static List<StyledText> Wrap(StyledText text, int width)
     {
         var lines = new List<StyledText>();
@@ -31,11 +31,19 @@ public static class TextRenderer
 
         foreach (var span in text.Spans)
         {
-            foreach (var (word, isSpace) in Tokenize(span.Text))
+            foreach (var (word, kind) in Tokenize(span.Text))
             {
+                if (kind == Token.LineBreak)
+                {
+                    lines.Add(current);
+                    current = StyledText.Empty();
+                    lineWidth = 0;
+                    continue;
+                }
+
                 int wordWidth = Unicode.StringWidth(word);
 
-                if (isSpace)
+                if (kind == Token.Space)
                 {
                     // Collapse a space that would overflow into a line break instead.
                     if (lineWidth + wordWidth > width)
@@ -229,17 +237,13 @@ public static class TextRenderer
                 // Take one grapheme cluster: a base scalar plus any trailing zero-width marks,
                 // so a combining sequence ("e"+U+0301) is drawn as one unit, not split.
                 int start = i;
-                char c = text[i];
-                int len = char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? 2 : 1;
-                var rune = len == 2 ? new System.Text.Rune(c, text[i + 1]) : new System.Text.Rune(c);
+                System.Text.Rune.DecodeFromUtf16(text[i..], out var rune, out int len);
                 int gw = Unicode.RuneWidth(rune);
                 i += len;
 
                 while (i < text.Length)
                 {
-                    char nc = text[i];
-                    int nlen = char.IsHighSurrogate(nc) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]) ? 2 : 1;
-                    var next = nlen == 2 ? new System.Text.Rune(nc, text[i + 1]) : new System.Text.Rune(nc);
+                    System.Text.Rune.DecodeFromUtf16(text[i..], out var next, out int nlen);
                     if (Unicode.RuneWidth(next) != 0)
                     {
                         break;
@@ -259,21 +263,39 @@ public static class TextRenderer
         surface.DrawText(cx, y, "…", lastStyle);
     }
 
-    private static IEnumerable<(string token, bool isSpace)> Tokenize(string text)
+    private enum Token { Word, Space, LineBreak }
+
+    // Splits text into words, runs of spaces, and line breaks (\n or \r\n).
+    private static IEnumerable<(string token, Token kind)> Tokenize(string text)
     {
         int i = 0;
         while (i < text.Length)
         {
+            int breakLength = LineBreakAt(text, i);
+            if (breakLength > 0)
+            {
+                i += breakLength;
+                yield return ("", Token.LineBreak);
+                continue;
+            }
+
             bool space = char.IsWhiteSpace(text[i]);
             int start = i;
-            while (i < text.Length && char.IsWhiteSpace(text[i]) == space)
+            while (i < text.Length && char.IsWhiteSpace(text[i]) == space && LineBreakAt(text, i) == 0)
             {
                 i++;
             }
 
-            yield return (text.Substring(start, i - start), space);
+            yield return (text.Substring(start, i - start), space ? Token.Space : Token.Word);
         }
     }
+
+    private static int LineBreakAt(string text, int i) => text[i] switch
+    {
+        '\n' => 1,
+        '\r' when i + 1 < text.Length && text[i + 1] == '\n' => 2,
+        _ => 0,
+    };
 
     private static IEnumerable<string> HardSplit(string word, int width, int startWidth)
     {

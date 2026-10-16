@@ -114,80 +114,38 @@ public sealed class Surface
         => DrawText(x, y, text.AsSpan(), style);
 
     /// <summary>Span overload of <see cref="DrawText(int,int,string,Style)"/>. Lets callers
-    /// draw a slice of a larger string without allocating a substring.</summary>
+    /// draw a slice of a larger string without allocating a substring. Control characters are drawn as visible
+    /// stand-ins (<see cref="Unicode.Printable"/>), so text can't move the cursor or start an escape sequence.</summary>
     public int DrawText(int x, int y, ReadOnlySpan<char> text, Style style)
     {
-        if (text.IsEmpty)
-        {
-            return x;
-        }
-
         int cx = x;
         int i = 0;
         while (i < text.Length)
         {
-            // Decode one scalar from the UTF-16 without allocating.
-            char c = text[i];
-            Rune rune;
-            int len;
-            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            // One grapheme cluster: a base scalar and the zero-width marks after it.
+            Rune.DecodeFromUtf16(text[i..], out Rune rune, out int length); // U+FFFD for an unpaired surrogate
+            int end = i + length;
+            while (end < text.Length)
             {
-                rune = new Rune(c, text[i + 1]);
-                len = 2;
-            }
-            else
-            {
-                rune = new Rune(c);
-                len = 1;
-            }
-
-            int w = Unicode.RuneWidth(rune);
-
-            // A trailing zero-width mark makes this a multi-scalar cluster: fall back to
-            // substring segmentation just for this run (rare).
-            int clusterEnd = i + len;
-            bool hasCombining = false;
-            while (clusterEnd < text.Length)
-            {
-                char nc = text[clusterEnd];
-                Rune next;
-                int nlen;
-                if (char.IsHighSurrogate(nc) && clusterEnd + 1 < text.Length && char.IsLowSurrogate(text[clusterEnd + 1]))
-                {
-                    next = new Rune(nc, text[clusterEnd + 1]);
-                    nlen = 2;
-                }
-                else
-                {
-                    next = new Rune(nc);
-                    nlen = 1;
-                }
-
-                if (Unicode.RuneWidth(next) == 0)
-                {
-                    hasCombining = true;
-                    clusterEnd += nlen;
-                }
-                else
+                Rune.DecodeFromUtf16(text[end..], out Rune next, out int nextLength);
+                if (Unicode.RuneWidth(next) != 0)
                 {
                     break;
                 }
+                end += nextLength;
             }
 
-            Cell cell;
-            if (hasCombining)
+            // Marks with no base before them take no cells, as StringWidth measures them.
+            if (Unicode.RuneWidth(rune) > 0)
             {
-                cell = Cell.FromGrapheme(new string(text.Slice(i, clusterEnd - i)), style);
-                i = clusterEnd;
+                // Only a cluster of several scalars needs a string.
+                Cell cell = end == i + length
+                    ? Cell.FromRune(rune, style)
+                    : Cell.FromGrapheme(new string(text[i..end]), style);
+                Set(cx, y, cell);
+                cx += cell.Width;
             }
-            else
-            {
-                cell = w <= 0 ? Cell.Blank(style) : Cell.FromRune(rune, style);
-                i += len;
-            }
-
-            Set(cx, y, cell);
-            cx += cell.Width == 0 ? 1 : cell.Width;
+            i = end;
         }
         return cx;
     }

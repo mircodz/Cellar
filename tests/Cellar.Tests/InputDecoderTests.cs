@@ -172,4 +172,12 @@ public class InputDecoderTests
         var ev = d.Flush();
         Assert.Equal(Key.Escape, ((KeyEvent)Assert.Single(ev)).Key);
     }
+
+    [Fact]
+    public void BackTab_IsShiftTab()
+    {
+        var key = Assert.IsType<KeyEvent>(Assert.Single(Decode("\u001b[Z")));
+        Assert.Equal(Key.Tab, key.Key);
+        Assert.Equal(KeyModifiers.Shift, key.Modifiers);
+    }
 }

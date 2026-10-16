@@ -36,7 +36,9 @@ public readonly struct Cell : IEquatable<Cell>
     /// <summary>The right half of a wide glyph: no glyph, zero width.</summary>
     public static Cell Continuation(Style style) => new('\0', '\0', null, style, 0);
 
-    /// <summary>Builds a cell from a grapheme cluster, computing its display width.</summary>
+    /// <summary>Builds a cell from a grapheme cluster, computing its display width. Control characters in it are
+    /// replaced with what <see cref="Unicode.Printable"/> draws and bidi controls are dropped, so the terminal
+    /// never receives them.</summary>
     public static Cell FromGrapheme(string grapheme, Style style)
     {
         if (string.IsNullOrEmpty(grapheme))
@@ -44,6 +46,7 @@ public readonly struct Cell : IEquatable<Cell>
             return Blank(style);
         }
 
+        grapheme = Unicode.Sanitize(grapheme);
         int w = Unicode.GraphemeWidth(grapheme);
         if (w <= 0)
         {
@@ -62,8 +65,11 @@ public readonly struct Cell : IEquatable<Cell>
         return new Cell('\0', '\0', grapheme, style, width);
     }
 
+    /// <summary>Builds a cell from one scalar. A control character becomes what <see cref="Unicode.Printable"/>
+    /// draws for it.</summary>
     public static Cell FromRune(Rune rune, Style style)
     {
+        rune = Unicode.Printable(rune);
         int w = Unicode.RuneWidth(rune);
         if (w <= 0)
         {

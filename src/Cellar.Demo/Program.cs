@@ -72,7 +72,9 @@ internal static class Program
             .Add(split, Constraint.Fill())
             .Add(footer, Constraint.Length(1));
 
-        app.OnEvent = e =>
+        // The shortcuts only get keys the demo doesn't use, so q, t, and d can be typed into a text field
+        // and Escape zooms a flamegraph out before it quits.
+        app.OnUnhandledEvent = e =>
         {
             switch (e)
             {
@@ -90,7 +92,7 @@ internal static class Program
                     OpenPalette(app, registry, sidebar);
                     return true;
             }
-            return app.Root.OnEvent(e);
+            return false;
         };
 
         app.OnMessage = msg =>

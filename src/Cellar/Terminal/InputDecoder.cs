@@ -280,11 +280,12 @@ public sealed class InputDecoder
             (byte)'D' => Key.Left,
             (byte)'H' => Key.Home,
             (byte)'F' => Key.End,
+            (byte)'Z' => Key.Tab, // back-tab: terminals send ESC [ Z for Shift+Tab
             _ => Key.None,
         };
         if (letterKey != Key.None)
         {
-            events.Add(new KeyEvent(letterKey, default, mods));
+            events.Add(new KeyEvent(letterKey, default, final == (byte)'Z' ? mods | KeyModifiers.Shift : mods));
             return end + 1;
         }
 

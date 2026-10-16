@@ -484,4 +484,19 @@ public class TreeViewTests
         tree.OnEvent(new MouseEvent(MouseEventKind.Down, MouseButton.Left, 5, 0, KeyModifiers.None));
         Assert.Equal("root", tree.SelectedNode!.Value);
     }
+
+    [Fact]
+    public void Enter_WithOnActivate_ActivatesWithoutToggling()
+    {
+        var tree = SimpleTree(out var root);
+        TreeNode<string>? activated = null;
+        tree.OnActivate = node => activated = node;
+        var s = new Surface(20, 6);
+        tree.HasFocus = true;
+        tree.Render(s, s.Bounds);
+
+        Assert.True(tree.OnEvent(K(Key.Enter)));
+        Assert.Same(root, activated);
+        Assert.False(root.IsExpanded);
+    }
 }

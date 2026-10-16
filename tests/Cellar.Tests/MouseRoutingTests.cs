@@ -250,4 +250,22 @@ public class ButtonTests
         Assert.False(b.OnEvent(Move(3, 0)));  // still inside, no change
         Assert.True(b.OnEvent(Move(20, 0)));  // leave → repaint
     }
+
+    [Fact]
+    public void Hover_OnTheSelectedRow_KeepsTheSelectionColors()
+    {
+        var tree = new TreeView<int> { RenderLabel = _ => StyledText.Of("go:").Append("LINK").Link(1) };
+        tree.AddRoot(0); // the only row, so it's selected
+        var s = new Surface(20, 3);
+        tree.Render(s, s.Bounds);
+        var selected = s.Get(6, 0).Style;
+        Assert.Equal(Theming.Theme.Current.SelectionBackground, selected.Background);
+
+        tree.OnEvent(Move(6, 0));
+        tree.Render(s, s.Bounds);
+        var hovered = s.Get(6, 0).Style;
+        Assert.Equal(selected.Foreground, hovered.Foreground);
+        Assert.Equal(selected.Background, hovered.Background);
+        Assert.True(hovered.Attributes.HasFlag(TextAttributes.Bold | TextAttributes.Underline));
+    }
 }

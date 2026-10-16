@@ -77,3 +77,14 @@ public class GeometryTests
         Assert.False(r.Contains(4, 4));
     }
 }
+
+public class StyleTests
+{
+    [Fact]
+    public void ToString_ListsTheComponents()
+    {
+        string text = new Style(Color.Default, Color.Default, TextAttributes.Bold).ToString();
+        Assert.StartsWith("Style { Foreground = ", text);
+        Assert.EndsWith("Attributes = Bold }", text);
+    }
+}

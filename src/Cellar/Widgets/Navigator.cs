@@ -41,7 +41,8 @@ public sealed class Navigator : Widget
     /// <summary>Whether to draw the breadcrumb bar at the top.</summary>
     public bool ShowBreadcrumb { get; set; } = true;
 
-    /// <summary>The key that pops the current page. Defaults to Escape.</summary>
+    /// <summary>The key that pops the current page when the page doesn't handle it, so a text box can still take
+    /// it. Defaults to Escape.</summary>
     public Key BackKey { get; set; } = Key.Escape;
 
     /// <summary>Raised after the stack changes (push or pop), with the new top page.</summary>
@@ -268,12 +269,17 @@ public sealed class Navigator : Widget
             }
         }
 
+        if (Current?.Content.OnEvent(e) == true)
+        {
+            return true;
+        }
+
         if (e is KeyEvent key && key.Key == BackKey && _stack.Count > 1)
         {
             Pop();
             return true;
         }
 
-        return Current?.Content.OnEvent(e) ?? false;
+        return false;
     }
 }

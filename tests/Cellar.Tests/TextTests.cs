@@ -1,6 +1,7 @@
 using Cellar.Primitives;
 using Cellar.Rendering;
 using Cellar.Text;
+using System.Linq;
 
 namespace Cellar.Tests;
 
@@ -151,5 +152,69 @@ public class TextRendererTests
         var links = new System.Collections.Generic.List<LinkHit>();
         TextRenderer.DrawLine(s, 0, 0, 10, StyledText.Of("plain"), Justify.Left, links);
         Assert.Empty(links);
+    }
+}
+
+public class DrawTextTests
+{
+    [Fact]
+    public void ControlCharacters_AreDrawnNotSent()
+    {
+        var s = new Surface(10, 1);
+        Assert.Equal(6, s.DrawText(0, 0, "a\u001b[2Jb", Style.Default));
+        Assert.Equal("a", s.Get(0, 0).Grapheme);
+        Assert.Equal("\u241B", s.Get(1, 0).Grapheme); // in a cell of its own, not merged into "a"
+        Assert.Equal("[", s.Get(2, 0).Grapheme);
+        Assert.Equal("b", s.Get(5, 0).Grapheme);
+    }
+
+    [Fact]
+    public void BidiControls_AreDropped()
+    {
+        var s = new Surface(10, 1);
+        Assert.Equal(4, s.DrawText(0, 0, "ab\u202Ecd", Style.Default));
+        Assert.Equal("b", s.Get(1, 0).Grapheme);
+        Assert.Equal("c", s.Get(2, 0).Grapheme);
+    }
+
+    [Fact]
+    public void UnpairedSurrogate_IsDrawnAsReplacementCharacter()
+    {
+        var s = new Surface(10, 1);
+        Assert.Equal(3, s.DrawText(0, 0, "a\uD800b", Style.Default));
+        Assert.Equal("\uFFFD", s.Get(1, 0).Grapheme);
+    }
+
+    [Fact]
+    public void MarkWithoutABase_TakesNoCell_AsMeasured()
+    {
+        var s = new Surface(10, 1);
+        Assert.Equal(Unicode.StringWidth("\u0301a"), s.DrawText(0, 0, "\u0301a", Style.Default));
+        Assert.Equal("a", s.Get(0, 0).Grapheme);
+    }
+
+    [Fact]
+    public void CombiningMark_StaysWithItsBase()
+    {
+        var s = new Surface(10, 1);
+        Assert.Equal(2, s.DrawText(0, 0, "e\u0301x", Style.Default));
+        Assert.Equal("e\u0301", s.Get(0, 0).Grapheme);
+    }
+
+    [Fact]
+    public void Cells_NeverHoldControlCharacters()
+    {
+        Assert.Equal("\u241B", Cell.FromGrapheme("\u001b", Style.Default).Grapheme);
+        Assert.Equal("\u2407", Cell.FromRune(new System.Text.Rune(7), Style.Default).Grapheme);
+        var sb = new System.Text.StringBuilder();
+        Cell.FromGrapheme("x\u202E\u0301", Style.Default).AppendTo(sb);
+        Assert.Equal("x\u0301", sb.ToString());
+    }
+
+    [Fact]
+    public void Wrap_BreaksLinesAtLineBreaks()
+    {
+        var lines = TextRenderer.Wrap(StyledText.Of("one\ntwo\r\n\nthree"), 20);
+        Assert.Equal(new[] { "one", "two", "", "three" }, lines.Select(line => line.PlainText));
     }
 }

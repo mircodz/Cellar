@@ -134,7 +134,12 @@ public abstract class Widget
     /// <summary>Re-paints the hovered link's cells. A link that specified its own hover style
     /// (via <see cref="StyledText.Link"/>) uses that; otherwise a highlight background + bold.
     /// Call at the end of a render pass, after link rects are recorded.</summary>
-    protected void DrawHoverEmphasis(Surface surface)
+    protected void DrawHoverEmphasis(Surface surface) => DrawHoverEmphasis(surface, selectedRow: -1);
+
+    /// <summary>Like <see cref="DrawHoverEmphasis(Surface)"/>, but a link on <paramref name="selectedRow"/> (the screen
+    /// row drawn as the selection, or -1) without a hover style of its own keeps the selection's colors and is only
+    /// made bold and underlined, so hovering it doesn't hide which row is selected.</summary>
+    protected void DrawHoverEmphasis(Surface surface, int selectedRow)
     {
         if (_links is null || _hoveredLink is null)
         {
@@ -154,8 +159,8 @@ public abstract class Widget
                 var s = cell.Style;
                 // A link may fully control its hover look; else default to highlight bg + bold so
                 // it stands out even on a striped row whose background already matches the tone.
-                var styled = hit.HoverStyle is { } hs
-                    ? hs
+                var styled = hit.HoverStyle is { } hs ? hs
+                    : hit.Y == selectedRow ? s.AddAttributes(TextAttributes.Bold | TextAttributes.Underline)
                     : new Style(s.Foreground, defaultBg, s.Attributes | TextAttributes.Bold);
                 surface.Set(x, hit.Y, cell.WithStyle(styled));
             }

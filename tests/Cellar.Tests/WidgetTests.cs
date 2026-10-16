@@ -3,6 +3,7 @@ using Cellar.Primitives;
 using Cellar.Rendering;
 using Cellar.Text;
 using Cellar.Widgets;
+using System.Linq;
 
 namespace Cellar.Tests;
 
@@ -186,5 +187,125 @@ public class WidgetTests
         Assert.True(t.ScrollOffset > 0); // scrolled to keep selection visible
         Assert.True(t.SelectedIndex >= t.ScrollOffset);
         Assert.True(t.SelectedIndex < t.ScrollOffset + 5);
+    }
+
+    private sealed record Item(string Name, long Bytes);
+
+    private static Table<Item> ItemTable()
+    {
+        var t = new Table<Item> { Sortable = true };
+        t.Columns.Add(new TableColumn<Item>("Name", Constraint.Fill(), item => StyledText.Of(item.Name).Fg(Color.Rgb(255, 0, 0))));
+        t.Columns.Add(new TableColumn<Item>("Size", Constraint.Length(8),
+            item => (item.Bytes / 1024.0).ToString("0.0 KB", System.Globalization.CultureInfo.InvariantCulture), Justify.Right)
+        {
+            SortKey = item => item.Bytes,
+        });
+        return t;
+    }
+
+    [Fact]
+    public void TypedTable_SortsByValueNotByText()
+    {
+        var t = ItemTable();
+        t.SetRows([new Item("small", 900), new Item("large", 20_000), new Item("medium", 9_000)]);
+        t.SortBy(1, SortState.Descending); // as text, "8.8 KB" would come before "19.5 KB"
+        Assert.Equal(["large", "medium", "small"], t.Rows.Select(r => r.Name));
+    }
+
+    [Fact]
+    public void TypedTable_CallbacksGetTheRowWhereverSortingMovedIt()
+    {
+        var t = ItemTable();
+        Item? selected = null, activated = null;
+        t.OnSelect = item => selected = item;
+        t.OnActivate = item => activated = item;
+        t.HasFocus = true;
+        t.SetRows([new Item("b", 2), new Item("a", 1), new Item("c", 3)]);
+        t.SortBy(1, SortState.Ascending);
+
+        t.OnEvent(new Terminal.KeyEvent(Terminal.Key.Enter, default, Terminal.KeyModifiers.None));
+        Assert.Equal("a", activated?.Name);
+        t.OnEvent(new Terminal.KeyEvent(Terminal.Key.Down, default, Terminal.KeyModifiers.None));
+        Assert.Equal("b", selected?.Name);
+    }
+
+    [Fact]
+    public void TypedTable_CellsKeepTheirColors_ExceptOnTheSelectedRow()
+    {
+        var t = ItemTable();
+        t.ShowHeader = false;
+        t.SetRows([new Item("first", 1), new Item("second", 2)]); // selects the first row
+        var s = new Surface(20, 2);
+        t.Render(s, s.Bounds);
+        Assert.Equal(Theming.Theme.Current.SelectionStyle, s.Get(0, 0).Style);
+        Assert.Equal(Color.Rgb(255, 0, 0), s.Get(0, 1).Style.Foreground);
+        Assert.Contains("0.0 KB", RowText(s, 1));
+    }
+
+    [Fact]
+    public void SetRows_KeepsTheSort_AndSelectsTheFirstRow()
+    {
+        var t = ItemTable();
+        t.SortBy(1, SortState.Ascending);
+        t.SetRows([new Item("c", 3), new Item("a", 1), new Item("b", 2)]);
+        Assert.Equal(["a", "b", "c"], t.Rows.Select(r => r.Name));
+        Assert.Equal(0, t.SelectedIndex);
+        Assert.Equal(SortState.Ascending, t.SortState);
+
+        t.SetRows([]);
+        Assert.Equal(-1, t.SelectedIndex);
+    }
+
+    [Fact]
+    public void SetRows_AcceptsAQueryOverItsOwnRows()
+    {
+        var t = ItemTable();
+        t.SetRows([new Item("a", 1), new Item("b", 2), new Item("c", 3)]);
+        t.SetRows(t.Rows.Where(item => item.Bytes > 1));
+        Assert.Equal(["b", "c"], t.Rows.Select(r => r.Name));
+    }
+
+    [Fact]
+    public void TypedTable_RowsWithoutAKeySortLast_AndEqualRowsKeepTheirOrder()
+    {
+        var t = new Table<Item> { Sortable = true };
+        t.Columns.Add(new TableColumn<Item>("Size", Constraint.Fill(), item => item.Name)
+        {
+            SortKey = item => item.Bytes < 0 ? null : item.Bytes,
+        });
+        t.SetRows([new Item("none", -1), new Item("x1", 5), new Item("y", 1), new Item("x2", 5)]);
+
+        t.SortBy(0, SortState.Descending);
+        Assert.Equal(["x1", "x2", "y", "none"], t.Rows.Select(r => r.Name));
+        t.SortBy(0, SortState.Ascending);
+        Assert.Equal(["y", "x1", "x2", "none"], t.Rows.Select(r => r.Name));
+        t.SortBy(0, SortState.None);
+        Assert.Equal(["none", "x1", "y", "x2"], t.Rows.Select(r => r.Name));
+    }
+
+    [Fact]
+    public void Table_TextThatDoesNotParse_SortsLast()
+    {
+        var t = new Table { Sortable = true };
+        t.Columns.Add(new Column("V", Constraint.Fill()) { SortKey = s => int.Parse(s) });
+        t.Rows.Add(["n/a"]);
+        t.Rows.Add(["9"]);
+        t.Rows.Add(["10"]);
+        t.SortBy(0, SortState.Descending);
+        Assert.Equal(["10", "9", "n/a"], t.Rows.Select(r => r[0]));
+    }
+
+    [Fact]
+    public void Table_ClearingTheSort_RestoresEveryRow()
+    {
+        var t = new Table { Sortable = true };
+        t.Columns.Add(new Column("V", Constraint.Fill()) { SortKey = s => int.Parse(s) });
+        string[] shared = ["2"];
+        t.Rows.Add(shared);
+        t.Rows.Add(["1"]);
+        t.Rows.Add(shared); // the same row twice
+        t.SortBy(0, SortState.Ascending);
+        t.SortBy(0, SortState.None);
+        Assert.Equal(["2", "1", "2"], t.Rows.Select(r => r[0]));
     }
 }

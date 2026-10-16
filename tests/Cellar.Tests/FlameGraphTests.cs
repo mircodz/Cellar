@@ -131,4 +131,20 @@ public class FlameGraphTests
         var s = new Surface(20, 4);
         fg.Render(s, s.Bounds); // no root -> no crash, nothing drawn
     }
+
+    [Fact]
+    public void ZoomOutKeys_AtTheRoot_AreLeftToTheScreen()
+    {
+        var fg = BuildGraph(out var root);
+        fg.HasFocus = true;
+        var s = new Surface(100, 4);
+        fg.Render(s, s.Bounds);
+        Assert.False(fg.OnEvent(new KeyEvent(Key.Backspace, default, KeyModifiers.None)));
+        Assert.False(fg.OnEvent(new KeyEvent(Key.Escape, default, KeyModifiers.None)));
+
+        fg.OnEvent(new KeyEvent(Key.Down, default, KeyModifiers.None));
+        fg.OnEvent(new KeyEvent(Key.Enter, default, KeyModifiers.None)); // zoom into parse
+        Assert.True(fg.OnEvent(new KeyEvent(Key.Escape, default, KeyModifiers.None)));
+        Assert.Same(root, fg.ZoomedFrame);
+    }
 }

@@ -229,4 +229,19 @@ public class NavigatorTests
         Assert.False(root.IsMounted);
         Assert.False(detail.IsMounted);
     }
+
+    [Fact]
+    public void BackKey_GoesToThePageFirst()
+    {
+        var sink = new KeySink(Key.Escape);
+        var nav = new Navigator(new Page("Home", new Label("home")));
+        nav.Push("Takes Escape", sink);
+        Assert.True(nav.OnEvent(Esc()));
+        Assert.Equal(1, sink.Seen);
+        Assert.Equal(2, nav.Depth); // the page used it
+
+        nav.Push("Plain", new Label("plain"));
+        Assert.True(nav.OnEvent(Esc()));
+        Assert.Equal(2, nav.Depth); // nothing used it, so it went back
+    }
 }

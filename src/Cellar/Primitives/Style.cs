@@ -19,4 +19,14 @@ public readonly record struct Style(Color Foreground, Color Background, TextAttr
     public Style Italic => AddAttributes(TextAttributes.Italic);
     public Style Underline => AddAttributes(TextAttributes.Underline);
     public Style Reverse => AddAttributes(TextAttributes.Reverse);
+
+    // The generated member list would include Bold, Dim, ... which return styles of their own, so ToString would
+    // recurse forever. Print only the three components.
+    private bool PrintMembers(System.Text.StringBuilder builder)
+    {
+        builder.Append("Foreground = ").Append(Foreground)
+            .Append(", Background = ").Append(Background)
+            .Append(", Attributes = ").Append(Attributes);
+        return true;
+    }
 }

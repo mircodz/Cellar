@@ -15,6 +15,9 @@ namespace Cellar.Demo;
 /// <summary>One frame in the tree demo: a name, self time, share, and a synthetic heap address.</summary>
 internal readonly record struct TraceFrame(string Name, double Ms, double Percent, long Addr = 0);
 
+/// <summary>One row of the table views demo.</summary>
+internal sealed record DemoPod(string Name, string Phase, int Restarts, TimeSpan Age);
+
 /// <summary>One row of the table demo: where something allocates, and how much.</summary>
 internal sealed record AllocationSite(string Type, string Method, string Allocator, double MiB, int Count, double OwnPercent)
 {
@@ -28,6 +31,7 @@ internal static class Demos
     public static readonly IReadOnlyList<Demo> All =
     [
         new("Table", "rows as objects: styled cells, sort by value, filter", Table),
+        new("Table views", "live refresh by key, query filter, groups, marks", TableViews),
         new("Tree", "collapsible, lazy, clickable links", Tree),
         new("Tabs", "tabbed container with a lens bar", TabsDemo),
         new("Dashboard", "many widgets composed on one page", Dashboard),
@@ -732,6 +736,117 @@ internal static class Demos
             .Add(line, Constraint.Length(1));
         return Padded(new KeyHost(body, keymap));
     }
+
+    // Table<T> as a live resource list: rows refresh every two seconds and keep the selection by RowKey (changed
+    // cells flash bold), "/" filters with a TableQuery, "g" groups by phase, space and * mark rows.
+    private static Widget TableViews(DemoContext ctx)
+    {
+        var rng = new Random(11);
+        string[] phases = ["Running", "Running", "Running", "Pending", "Failed"];
+        var pods = Enumerable.Range(0, 40).Select(i => new DemoPod(
+            $"{(i % 4 == 0 ? "api" : i % 4 == 1 ? "web" : i % 4 == 2 ? "worker" : "db")}-{i:00}",
+            phases[rng.Next(phases.Length)], rng.Next(0, 6), TimeSpan.FromMinutes(rng.Next(1, 600)))).ToList();
+
+        var table = new Table<DemoPod>
+        {
+            ShowHeader = true, Striped = true, ShowScrollbar = true, Sortable = true, HasFocus = true,
+            RowKey = p => p.Name, HighlightChanges = true, Markable = true,
+            EmptyText = new StyledText("no pods match"),
+            GroupSummary = g => new StyledText($"{g.Rows.Sum(p => p.Restarts)} restarts", Theme.Current.MutedStyle),
+        };
+        static Style PhaseStyle(string phase) => new(phase switch
+        {
+            "Running" => Theme.Current.Success,
+            "Pending" => Theme.Current.Warning,
+            _ => Theme.Current.Error,
+        }, Color.Default);
+        table.Columns.Add(new TableColumn<DemoPod>("Name", Constraint.Fill(2), p => p.Name));
+        table.Columns.Add(new TableColumn<DemoPod>("Phase", Constraint.Length(9), p => new StyledText(p.Phase, PhaseStyle(p.Phase))) { Aliases = ["status", "st"] });
+        table.Columns.Add(new TableColumn<DemoPod>("Restarts", Constraint.Length(9), p => p.Restarts.ToString(CultureInfo.InvariantCulture), Justify.Right) { SortKey = p => p.Restarts, Aliases = ["r"] });
+        table.Columns.Add(new TableColumn<DemoPod>("Age", Constraint.Length(8), p => FormatAge(p.Age), Justify.Right) { SortKey = p => p.Age });
+        table.SetRows(pods);
+
+        var keymap = new Keymap();
+        var line = new CommandLine();
+        var count = line.Status.Add(new StatusItem("", priority: 10));
+        line.Status.Keymap = keymap;
+        void UpdateCount() => count.Text = new StyledText($"{table.FilteredRows.Count}/{pods.Count} pods", Theme.Current.MutedStyle)
+            .Append(table.Marked.Count > 0 ? $"  {table.Marked.Count} marked" : "", Theme.Current.AccentStyle)
+            .Append(table.Query is { IsEmpty: false } q ? $"  /{q.Text}" : "", Theme.Current.AccentStyle);
+        table.OnMarksChanged = UpdateCount;
+
+        var filter = new CommandMode("/")
+        {
+            History = new InputHistory(),
+            Placeholder = "phase=running restarts>2 age<1h web …",
+            OnChange = text => { table.Query = TableQuery.Parse(text); UpdateCount(); },
+            OnCancel = () => { table.Query = null; UpdateCount(); },
+        };
+        keymap.Add(new AppAction("filter", "Filter", () => line.Open(filter, table.Query?.Text ?? "")) { Keys = ["/"], Footer = "filter", Priority = 4 });
+        keymap.Add(new AppAction("group", "Group by phase", () =>
+        {
+            if (table.GroupColumn < 0)
+            {
+                table.GroupBy("Phase");
+            }
+            else
+            {
+                table.Ungroup();
+            }
+        }) { Keys = ["g"], Footer = "group", Priority = 3 });
+        keymap.Add(new AppAction("mark", "Mark", () =>
+        {
+            if (table.Selected is { } pod)
+            {
+                table.ToggleMark(pod);
+            }
+        }) { Keys = ["space"], Footer = "mark", Priority = 2 });
+        keymap.Add(new AppAction("delete", "Delete marked", () =>
+        {
+            var doomed = table.Marked.Select(p => p.Name).ToHashSet();
+            pods.RemoveAll(p => doomed.Contains(p.Name));
+            table.SetRows(pods);
+            line.Status.Show($"Deleted {doomed.Count} pods", StatusLevel.Success);
+            UpdateCount();
+        }) { Keys = ["ctrl+d"], Footer = "delete marked", Priority = 1, When = () => table.Marked.Count > 0 });
+
+        // Every two seconds a few pods restart or change phase, and now and then one is replaced.
+        int ticks = 0;
+        ctx.Tick += _ =>
+        {
+            if (++ticks % 25 != 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < 3 && pods.Count > 0; i++)
+            {
+                int at = rng.Next(pods.Count);
+                pods[at] = pods[at] with { Restarts = pods[at].Restarts + 1, Phase = phases[rng.Next(phases.Length)] };
+            }
+
+            if (rng.Next(3) == 0 && pods.Count > 0)
+            {
+                pods.RemoveAt(rng.Next(pods.Count));
+                pods.Add(new DemoPod($"job-{ticks / 25:000}", "Pending", 0, TimeSpan.Zero));
+            }
+
+            pods = pods.Select(p => p with { Age = p.Age + TimeSpan.FromSeconds(2) }).ToList();
+            table.SetRows(pods);
+            UpdateCount();
+        };
+
+        UpdateCount();
+        ctx.Intercept = line.Intercept;
+        var body = new Stack(Direction.Vertical)
+            .Add(table, Constraint.Fill())
+            .Add(line, Constraint.Length(1));
+        return Padded(new KeyHost(body, keymap));
+    }
+
+    private static string FormatAge(TimeSpan age) => age.TotalHours >= 1
+        ? $"{(int)age.TotalHours}h{age.Minutes:00}m"
+        : $"{age.Minutes}m{age.Seconds:00}s";
 
     private static Widget Panels(DemoContext ctx) =>
         Padded(new Stack(Direction.Horizontal)

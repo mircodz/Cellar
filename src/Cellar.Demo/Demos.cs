@@ -41,6 +41,7 @@ internal static class Demos
         new("Spinners", "indeterminate animations (live)", Spinners),
         new("Input & forms", "text fields, masking, live filter", Input),
         new("Readline input", "ctrl+w, alt+b, ctrl+u… and ↑/↓ history", ReadlineInput),
+        new("Keymap", "one declaration: keys, :commands, help, palette", KeymapDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -546,6 +547,39 @@ internal static class Demos
             .Add(new Rule(StyledText.Of("submitted")), Constraint.Length(1))
             .Add(new Padding(log, new Thickness(1, 0)), Constraint.Fill());
         body.HasFocus = true;
+        return Padded(body);
+    }
+
+    // A Keymap of AppActions: the keys below, the help screen (?) and the palette (ctrl+o here) all come from
+    // the same declarations. A page scope rebinds a key while it's switched on.
+    private static Widget KeymapDemo(DemoContext ctx)
+    {
+        var ran = new List<string>();
+        var log = new Label(StyledText.Empty()) { Wrap = true };
+        void Ran(string what)
+        {
+            ran.Insert(0, $"{DateTime.Now:HH:mm:ss}  {what}");
+            log.Content = new StyledText(string.Join("\n", ran.Take(12)), Theme.Current.TextStyle);
+        }
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("refresh", "Refresh", () => Ran("refresh")) { Keys = ["r", "f5"], Commands = ["refresh"], Footer = "refresh" });
+        keymap.Add(new AppAction("top", "Go to the top", () => Ran("top (a two-key sequence)")) { Group = "Movement", Keys = ["g g"] });
+        keymap.Add(new AppAction("bottom", "Go to the bottom", () => Ran("bottom")) { Group = "Movement", Keys = ["G"] });
+        keymap.Add(new AppAction("describe", "Describe", () => Ran("describe (app scope)")) { Group = "Row", Keys = ["e"] });
+        keymap.Add(new AppAction("help", "Show these keys", () => keymap.ShowHelp(ctx.App!)) { Keys = ["?"], When = () => ctx.App is not null });
+        keymap.Add(new AppAction("palette", "Command palette", () => keymap.ShowPalette(ctx.App!)) { Keys = ["ctrl+o"], When = () => ctx.App is not null, ShowInPalette = false });
+
+        bool pageOn = false;
+        var page = keymap.AddScope("page", KeymapScope.PagePrecedence, () => pageOn);
+        page.Add(new AppAction("edit", "Edit (page scope, takes e)", () => Ran("edit (page scope)")) { Group = "Row", Keys = ["e"] });
+        keymap.Add(new AppAction("scope", "Toggle the page scope", () => { pageOn = !pageOn; Ran(pageOn ? "page scope on: e edits" : "page scope off: e describes"); }) { Keys = ["s"] });
+
+        var help = keymap.CreateHelp();
+        var body = new Stack(Direction.Horizontal)
+            .Add(new Panel(new KeyHost(log, keymap, help.Refresh), "what ran"), Constraint.Fill())
+            .Add(new Panel(help, "generated help"), Constraint.Fill());
+        Ran("press r, g g, G, e, s, ? or ctrl+o");
         return Padded(body);
     }
 

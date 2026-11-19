@@ -30,7 +30,7 @@ internal static class Program
         using var app = new App(terminal);
         using var cts = new CancellationTokenSource();
 
-        var ctx = new DemoContext();
+        var ctx = new DemoContext { App = app };
         var themes = BuiltIn.All;
         int themeIndex = 0;
 
@@ -211,6 +211,9 @@ internal sealed record TickMessage;
 /// </summary>
 internal sealed class DemoContext
 {
+    /// <summary>The running app, for demos that open overlays; null in the offscreen self-check.</summary>
+    public App? App { get; init; }
+
     /// <summary>Rises by a small step each tick; demos derive animation from it.</summary>
     public double Phase { get; private set; }
 

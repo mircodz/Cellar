@@ -72,6 +72,8 @@ internal static class Program
             .Add(split, Constraint.Fill())
             .Add(footer, Constraint.Length(1));
 
+        app.OnEvent = e => ctx.Intercept?.Invoke(e) ?? false;
+
         // The shortcuts only get keys the demo doesn't use, so q, t, and d can be typed into a text field
         // and Escape zooms a flamegraph out before it quits.
         app.OnUnhandledEvent = e =>
@@ -230,6 +232,10 @@ internal sealed class DemoContext
     /// <summary>Rises by a small step each tick; demos derive animation from it.</summary>
     public double Phase { get; private set; }
 
+    /// <summary>Sees every event before the page does, like <see cref="App.OnEvent"/>, for a demo with a
+    /// <see cref="CommandLine"/> (an open prompt must get Tab before the gallery's focus switching).</summary>
+    public Func<InputEvent, bool>? Intercept { get; set; }
+
     /// <summary>Raised once per animation tick. Live demos subscribe to update their widgets.</summary>
     public event Action<double>? Tick;
 
@@ -241,7 +247,11 @@ internal sealed class DemoContext
 
     /// <summary>Clears all Tick subscribers — called when the shown demo changes so a hidden
     /// demo's widgets stop being animated.</summary>
-    public void ResetSubscribers() => Tick = null;
+    public void ResetSubscribers()
+    {
+        Tick = null;
+        Intercept = null;
+    }
 }
 
 /// <summary>One catalog entry: a name, a one-line blurb, and a builder that produces the widget.</summary>

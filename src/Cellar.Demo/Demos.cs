@@ -43,6 +43,7 @@ internal static class Demos
         new("Readline input", "ctrl+w, alt+b, ctrl+u… and ↑/↓ history", ReadlineInput),
         new("Keymap", "one declaration: keys, :commands, help, palette", KeymapDemo),
         new("Status line", "items that give way by priority, messages, key hints", StatusLineDemo),
+        new("Command line", ":commands with completion, / filter, questions", CommandLineDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -635,6 +636,101 @@ internal static class Demos
             .Add(new Rule(StyledText.Of("44 columns")), Constraint.Length(1))
             .Add(new Stack(Direction.Horizontal).Add(narrow, Constraint.Length(44)).Add(new Label(StyledText.Empty()), Constraint.Fill()), Constraint.Length(1));
         return Padded(body);
+    }
+
+    // A CommandLine sharing the bottom row with a StatusLine: ":" runs the keymap's commands (tab completes names
+    // and node arguments), "/" filters as you type, "r" asks for a new name and refuses invalid ones.
+    private static Widget CommandLineDemo(DemoContext ctx)
+    {
+        var nodes = new List<string> { "node-east-01", "node-east-02", "node-west-01", "node-west-02", "node-west-03", "gpu-pool-01", "gpu-pool-02", "ingress-01" };
+        string filter = "";
+        var list = new Table { ShowHeader = false, ShowScrollbar = true, HasFocus = true };
+        list.Columns.Add(new Column("", Constraint.Fill()));
+
+        var keymap = new Keymap();
+        var line = new CommandLine();
+        var count = line.Status.Add(new StatusItem("", priority: 10));
+        line.Status.Keymap = keymap;
+
+        void Reload(string? select = null)
+        {
+            string? current = select ?? (list.SelectedIndex >= 0 && list.SelectedIndex < list.Rows.Count ? list.Rows[list.SelectedIndex][0] : null);
+            list.Rows.Clear();
+            foreach (var n in nodes.Where(n => n.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+            {
+                list.Rows.Add(new[] { n });
+            }
+
+            int at = current is null ? -1 : list.Rows.FindIndex(r => r[0] == current);
+            list.SelectedIndex = list.Rows.Count == 0 ? -1 : Math.Max(0, at);
+            count.Text = new StyledText($"{list.Rows.Count} of {nodes.Count} nodes", Theme.Current.MutedStyle)
+                .Append(filter.Length > 0 ? $"  /{filter}" : "", Theme.Current.AccentStyle);
+        }
+
+        string? Selected() => list.SelectedIndex >= 0 && list.SelectedIndex < list.Rows.Count ? list.Rows[list.SelectedIndex][0] : null;
+
+        var commands = line.CommandsFor(keymap);
+        ((KeymapCompletionSource)commands.Completion!).Arguments = (action, typed) => action.Id == "goto" ? nodes : [];
+        var filterMode = new CommandMode("/")
+        {
+            History = new InputHistory(),
+            Placeholder = "filter nodes…",
+            OnChange = text => { filter = text; Reload(); },
+            OnCancel = () => { filter = ""; Reload(); },
+        };
+
+        string? ValidName(string name, string? except) =>
+            string.IsNullOrWhiteSpace(name) ? "a name is required"
+            : name.Contains(' ', StringComparison.Ordinal) ? "no spaces"
+            : name != except && nodes.Contains(name) ? $"{name} already exists"
+            : null;
+
+        keymap.Add(new AppAction("cmd", "Command", () => line.Open(commands)) { Keys = [":"], Footer = "cmd", Priority = 3, ShowInPalette = false });
+        keymap.Add(new AppAction("filter", "Filter nodes", () => line.Open(filterMode, filter)) { Keys = ["/"], Footer = "filter", Priority = 2 });
+        keymap.Add(new AppAction("rename", "Rename the node", () =>
+        {
+            if (Selected() is not { } old)
+            {
+                return;
+            }
+
+            line.Ask("Rename to:", old, name => ValidName(name, old), name =>
+            {
+                nodes[nodes.IndexOf(old)] = name;
+                Reload(name);
+                line.Status.Show($"Renamed {old} to {name}", StatusLevel.Success);
+            });
+        }) { Keys = ["r"], Commands = ["rename"], Footer = "rename", Priority = 1, When = () => Selected() is not null });
+        keymap.Add(new AppAction("add", "Add a node", name =>
+        {
+            string? problem = name is null ? "usage: add <name>" : ValidName(name, null);
+            if (problem is not null)
+            {
+                line.Status.ShowError(problem);
+                return;
+            }
+
+            nodes.Add(name!);
+            Reload(name);
+        }) { Commands = ["add"], ArgumentHint = "<name>" });
+        keymap.Add(new AppAction("goto", "Select a node", name =>
+        {
+            filter = "";
+            Reload(name);
+        }) { Commands = ["goto", "go"], ArgumentHint = "<node>" });
+        keymap.Add(new AppAction("delete", "Delete the node", () =>
+        {
+            nodes.Remove(Selected()!);
+            Reload();
+        }) { Commands = ["delete", "rm"], When = () => Selected() is not null });
+
+        Reload();
+        ctx.Intercept = line.Intercept;
+        line.Status.Show("Try :add db-01, :go <tab>, /west, or r to rename", StatusLevel.Info, TimeSpan.FromSeconds(30));
+        var body = new Stack(Direction.Vertical)
+            .Add(new Panel(list, " nodes "), Constraint.Fill())
+            .Add(line, Constraint.Length(1));
+        return Padded(new KeyHost(body, keymap));
     }
 
     private static Widget Panels(DemoContext ctx) =>

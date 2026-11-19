@@ -113,6 +113,8 @@ public sealed class Keymap
     private readonly List<KeyChord> _pending = new();
     private long _pendingSince;
     private int _scopeOrder;
+    private List<KeymapScope>? _ordered; // scopes by precedence; rebuilt after a scope is added or removed
+    private readonly List<AppAction> _available = new();
 
     // Reused while resolving, so a key press doesn't allocate a list per scope.
     private readonly List<AppAction> _collect = new();
@@ -157,6 +159,7 @@ public sealed class Keymap
     {
         var scope = new KeymapScope(name, precedence, active, null, _scopeOrder++);
         _scopes.Add(scope);
+        _ordered = null;
         return scope;
     }
 
@@ -167,17 +170,28 @@ public sealed class Keymap
         ArgumentNullException.ThrowIfNull(provider);
         var scope = new KeymapScope(name, precedence, active, provider, _scopeOrder++);
         _scopes.Add(scope);
+        _ordered = null;
         return scope;
     }
 
     /// <summary>Removes a scope.</summary>
-    public bool RemoveScope(KeymapScope scope) => scope != Global && _scopes.Remove(scope);
+    public bool RemoveScope(KeymapScope scope)
+    {
+        _ordered = null;
+        return scope != Global && _scopes.Remove(scope);
+    }
+
+    /// <summary>Changes whenever the user's overrides change, so a cache of key hints knows to rebuild.</summary>
+    public int Version { get; private set; }
 
     /// <summary>Makes <paramref name="keys"/> run the action <paramref name="actionId"/>, ahead of any default
     /// binding of those keys; null or empty unbinds them.</summary>
     /// <exception cref="FormatException"><paramref name="keys"/> isn't a key.</exception>
-    public void Remap(string keys, string? actionId) =>
+    public void Remap(string keys, string? actionId)
+    {
         _overrides[KeySequence.Parse(keys)] = string.IsNullOrEmpty(actionId) ? null : actionId;
+        Version++;
+    }
 
     /// <summary>Applies the user's overrides, e.g. read from a config file (<c>{"ctrl+r": "refresh", "q": ""}</c>).
     /// Returns a description of each entry it couldn't apply (a key it can't parse, or an unknown action id), so
@@ -202,11 +216,16 @@ public sealed class Keymap
             _overrides[sequence] = string.IsNullOrEmpty(actionId) ? null : actionId;
         }
 
+        Version++;
         return problems;
     }
 
     /// <summary>Removes every override, restoring the default keys.</summary>
-    public void ClearOverrides() => _overrides.Clear();
+    public void ClearOverrides()
+    {
+        _overrides.Clear();
+        Version++;
+    }
 
     private bool IsKnownAction(string id)
     {
@@ -264,9 +283,13 @@ public sealed class Keymap
 
     private List<KeymapScope> ScopesByPrecedence()
     {
-        var ordered = new List<KeymapScope>(_scopes);
-        ordered.Sort((a, b) => a.Precedence != b.Precedence ? b.Precedence.CompareTo(a.Precedence) : b.Order.CompareTo(a.Order));
-        return ordered;
+        if (_ordered is null)
+        {
+            _ordered = new List<KeymapScope>(_scopes);
+            _ordered.Sort((a, b) => a.Precedence != b.Precedence ? b.Precedence.CompareTo(a.Precedence) : b.Order.CompareTo(a.Order));
+        }
+
+        return _ordered;
     }
 
     /// <summary>The keys that run <paramref name="action"/> now: those the user mapped to it, then its own keys
@@ -477,23 +500,78 @@ public sealed class Keymap
     public IReadOnlyList<AppAction> FooterActions()
     {
         var result = new List<AppAction>();
-        foreach (var action in Actions)
+        CollectFooterActions(result);
+        return result;
+    }
+
+    /// <summary>Like <see cref="FooterActions"/>, into a list the caller reuses, so a footer that asks every frame
+    /// doesn't allocate (beyond what scope providers and <see cref="AppAction.When"/> do).</summary>
+    public void CollectFooterActions(List<AppAction> into)
+    {
+        into.Clear();
+        _available.Clear();
+        CollectAvailable(_available);
+        foreach (var action in _available)
         {
-            if (action.Footer is not null && KeysFor(action).Count > 0)
+            if (action.Footer is null || !HasKeys(action))
             {
-                result.Add(action);
+                continue;
+            }
+
+            // Insertion sort: stable, and the list is a handful of items.
+            int i = into.Count;
+            into.Add(action);
+            while (i > 0 && into[i - 1].Priority < action.Priority)
+            {
+                into[i] = into[i - 1];
+                i--;
+            }
+
+            into[i] = action;
+        }
+    }
+
+    private bool HasKeys(AppAction action)
+    {
+        foreach (var (_, id) in _overrides)
+        {
+            if (id == action.Id)
+            {
+                return true;
             }
         }
 
-        // List.Sort isn't stable; break ties by declaration order.
-        var order = new Dictionary<AppAction, int>(ReferenceEqualityComparer.Instance);
-        for (int i = 0; i < result.Count; i++)
+        foreach (var sequence in action.Keys)
         {
-            order[result[i]] = i;
+            if (!_overrides.ContainsKey(sequence))
+            {
+                return true;
+            }
         }
 
-        result.Sort((a, b) => a.Priority != b.Priority ? b.Priority.CompareTo(a.Priority) : order[a].CompareTo(order[b]));
-        return result;
+        return false;
+    }
+
+    /// <summary>The key the footer shows for <paramref name="action"/>: the first of <see cref="KeysFor"/>, or null.</summary>
+    public KeySequence? PrimaryKey(AppAction action)
+    {
+        foreach (var (sequence, id) in _overrides)
+        {
+            if (id == action.Id)
+            {
+                return sequence;
+            }
+        }
+
+        foreach (var sequence in action.Keys)
+        {
+            if (!_overrides.ContainsKey(sequence))
+            {
+                return sequence;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>How to run <paramref name="action"/>, for the help and the palette: <c>ctrl+r/f5  :refresh</c>.</summary>

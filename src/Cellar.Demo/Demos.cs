@@ -42,6 +42,7 @@ internal static class Demos
         new("Input & forms", "text fields, masking, live filter", Input),
         new("Readline input", "ctrl+w, alt+b, ctrl+u… and ↑/↓ history", ReadlineInput),
         new("Keymap", "one declaration: keys, :commands, help, palette", KeymapDemo),
+        new("Status line", "items that give way by priority, messages, key hints", StatusLineDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -580,6 +581,59 @@ internal static class Demos
             .Add(new Panel(new KeyHost(log, keymap, help.Refresh), "what ran"), Constraint.Fill())
             .Add(new Panel(help, "generated help"), Constraint.Fill());
         Ran("press r, g g, G, e, s, ? or ctrl+o");
+        return Padded(body);
+    }
+
+    // A StatusLine: items left and right that shorten and then drop by priority as the line narrows, key hints
+    // generated from a Keymap (click them), a mode badge, a spinner, and messages that take the line over.
+    private static Widget StatusLineDemo(DemoContext ctx)
+    {
+        var keymap = new Keymap();
+        var wide = new StatusLine { Keymap = keymap, ErrorHint = new StyledText("d dismiss", Theme.Current.MutedStyle) };
+        var narrow = new StatusLine { Keymap = keymap };
+        var lines = new[] { wide, narrow };
+
+        var normal = StatusItem.Badge("NORMAL");
+        var insert = StatusItem.Badge("INSERT", Theme.Current.Success);
+        insert.Visible = false;
+        var spinners = new List<SpinnerStatusItem>();
+        foreach (var line in lines)
+        {
+            line.Add(normal);
+            line.Add(insert);
+            line.Add(new StatusItem(new StyledText("cluster ", Theme.Current.MutedStyle).Append("prod-west"), priority: 50) { ShortText = "prod-west" });
+            line.Add(new StatusItem("42 nodes", priority: 5) { ShortText = "42n" });
+            spinners.Add((SpinnerStatusItem)line.Add(new SpinnerStatusItem("refreshing", priority: 20)));
+        }
+
+        void Each(Action<StatusLine> act)
+        {
+            foreach (var line in lines)
+            {
+                act(line);
+            }
+        }
+
+        keymap.Add(new AppAction("info", "Show an info message", () => Each(l => l.Show("Saved 3 settings"))) { Keys = ["i"], Footer = "info", Priority = 5 });
+        keymap.Add(new AppAction("error", "Show an error", () => Each(l => l.ShowError("Couldn't reach the cluster: connection refused"))) { Keys = ["e"], Footer = "error", Priority = 4 });
+        keymap.Add(new AppAction("warn", "Show a warning", () => Each(l => l.Show("2 nodes are down", StatusLevel.Warning))) { Keys = ["w"], Footer = "warn", Priority = 3 });
+        keymap.Add(new AppAction("dismiss", "Dismiss the message", () => Each(l => l.Dismiss())) { Keys = ["d"] });
+        keymap.Add(new AppAction("spin", "Toggle the spinner", () => spinners.ForEach(s => s.Active = !s.Active)) { Keys = ["s"], Footer = "spinner", Priority = 2 });
+        keymap.Add(new AppAction("mode", "Toggle the mode", () => (normal.Visible, insert.Visible) = (insert.Visible, normal.Visible)) { Keys = ["m"], Footer = "mode", Priority = 1 });
+
+        var note = new Label(new StyledText(
+            "Press i, w or e for messages (info and warnings fade after 5s, errors stay until d), s for the spinner, " +
+            "m to switch the mode badge. The key hints on the right come from the Keymap and are clickable.\n\n" +
+            "The second line is narrower: items fall back to their short text from the lowest priority up (hints keep " +
+            "just their keys), and when that isn't enough the least important drop out.", Theme.Current.TextStyle)) { Wrap = true };
+
+        var body = new Stack(Direction.Vertical)
+            .Add(new KeyHost(note, keymap), Constraint.Fill())
+            .Add(new Rule(StyledText.Of("full width")), Constraint.Length(1))
+            .Add(wide, Constraint.Length(1))
+            .Add(new Label(StyledText.Empty()), Constraint.Length(1))
+            .Add(new Rule(StyledText.Of("44 columns")), Constraint.Length(1))
+            .Add(new Stack(Direction.Horizontal).Add(narrow, Constraint.Length(44)).Add(new Label(StyledText.Empty()), Constraint.Fill()), Constraint.Length(1));
         return Padded(body);
     }
 

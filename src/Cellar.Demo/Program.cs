@@ -22,7 +22,7 @@ internal static class Program
     {
         if (args.Length > 0 && args[0] == "--selfcheck")
         {
-            SelfCheck();
+            SelfCheck(args.Length > 1 ? args[1] : null);
             return;
         }
 
@@ -150,8 +150,8 @@ internal static class Program
     }
 
     // Renders every demo offscreen (with a few animation ticks) to catch build/render errors
-    // without a live terminal. Run with `dotnet run -- --selfcheck`.
-    private static void SelfCheck()
+    // without a live terminal. Run with `dotnet run -- --selfcheck`; add a demo name to print its last frame.
+    private static void SelfCheck(string? print = null)
     {
         var ctx = new DemoContext();
         var surface = new Surface(100, 30);
@@ -168,6 +168,19 @@ internal static class Program
                 surface.ResetClip();
             }
             Console.WriteLine($"ok  {demo.Name}");
+            if (string.Equals(print, demo.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                for (int y = 0; y < surface.Height; y++)
+                {
+                    var line = new System.Text.StringBuilder();
+                    for (int x = 0; x < surface.Width; x++)
+                    {
+                        line.Append(surface.Get(x, y).Grapheme is { Length: > 0 } g ? g : " ");
+                    }
+
+                    Console.WriteLine("│" + line.ToString().TrimEnd());
+                }
+            }
         }
         Console.WriteLine($"selfcheck passed: {Demos.All.Count} demos rendered.");
     }

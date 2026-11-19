@@ -48,6 +48,7 @@ internal static class Demos
         new("Keymap", "one declaration: keys, :commands, help, palette", KeymapDemo),
         new("Status line", "items that give way by priority, messages, key hints", StatusLineDemo),
         new("Command line", ":commands with completion, / filter, questions", CommandLineDemo),
+        new("Form", "settings to review and change, as a page or a dialog", FormDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -847,6 +848,66 @@ internal static class Demos
     private static string FormatAge(TimeSpan age) => age.TotalHours >= 1
         ? $"{(int)age.TotalHours}h{age.Minutes:00}m"
         : $"{age.Minutes}m{age.Seconds:00}s";
+
+    // A Form embedded in the page, and the same fields in a FormDialog on "o". Submitting shows what changed.
+    private static Widget FormDemo(DemoContext ctx)
+    {
+        static List<FormField> Fields() =>
+        [
+            new FormField("service", "Service", "fabric:/shop/web") { ReadOnly = true, Section = "Service", Hint = "the service these settings apply to" },
+            new FormField("instances", "Instances", "3") { Kind = FormFieldKind.Number, Min = 1, Max = 50, Integer = true, Section = "Service", Hint = "how many instances run, 1 to 50" },
+            new FormField("placement", "Placement", "spread") { Choices = ["spread", "pack", "zone-aware"], Section = "Service", Hint = "←/→ or enter to pick" },
+            new FormField("grace", "Close grace", "30s") { Kind = FormFieldKind.Duration, Note = "default 30s", Section = "Upgrade", Hint = "how long an instance gets to close: 90s, 5m, 1h30m" },
+            new FormField("monitored", "Monitored", "true") { Kind = FormFieldKind.Flag, Section = "Upgrade", Hint = "roll back when health checks fail" },
+            new FormField("token", "Deploy token", "s3cr3t-t0ken") { Kind = FormFieldKind.Secret, Section = "Upgrade", Hint = "never shown, also not while typing" },
+            new FormField("owner", "Owner", "team-web") { Section = "Upgrade", Validate = v => v.Contains(' ') ? "no spaces" : null },
+        ];
+
+        var result = new Label(new StyledText("Nothing submitted yet.", Theme.Current.MutedStyle)) { Wrap = true };
+        void Report(IReadOnlyDictionary<string, string> changes) =>
+            result.Content = new StyledText("Submitted: ", Theme.Current.TextStyle)
+                .Append(string.Join(", ", changes.Select(c => $"{c.Key}={c.Value}")), Theme.Current.AccentStyle);
+
+        var form = new Form(Fields()) { HasFocus = true };
+        form.OnSubmit = changes =>
+        {
+            Report(changes);
+            foreach (var field in form.Fields)
+            {
+                field.Accept();
+            }
+        };
+        form.OnCancel = () =>
+        {
+            form.RevertAll();
+            result.Content = new StyledText("Cancelled: changes discarded.", Theme.Current.MutedStyle);
+        };
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("open", "Open as a dialog", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                FormDialog.Show(app, "web settings", Fields(), Report,
+                    () => result.Content = new StyledText("Dialog cancelled.", Theme.Current.MutedStyle));
+            }
+        }) { Keys = ["o"] });
+
+        var note = new Label(new StyledText(
+            "↑/↓ move, enter edits in place (choices and flags cycle, as do ←/→ and space), u reverts a field, " +
+            "ctrl+s or a applies the changed values only, esc cancels (twice when there are changes). " +
+            "While editing, the readline keys work and enter refuses invalid values.\n\n" +
+            "Press o for the same fields in a FormDialog.", Theme.Current.TextStyle)) { Wrap = true };
+
+        var right = new Stack(Direction.Vertical)
+            .Add(note, Constraint.Length(10))
+            .Add(result, Constraint.Fill());
+        var body = new Stack(Direction.Horizontal)
+            .Add(new KeyHost(new Panel(form, "settings") { BorderStyle = BorderStyle.Rounded }, keymap), Constraint.Fill(3))
+            .Add(new Label(StyledText.Empty()), Constraint.Length(2))
+            .Add(right, Constraint.Fill(2));
+        return Padded(body);
+    }
 
     private static Widget Panels(DemoContext ctx) =>
         Padded(new Stack(Direction.Horizontal)

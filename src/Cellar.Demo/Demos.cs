@@ -49,6 +49,7 @@ internal static class Demos
         new("Status line", "items that give way by priority, messages, key hints", StatusLineDemo),
         new("Command line", ":commands with completion, / filter, questions", CommandLineDemo),
         new("Form", "settings to review and change, as a page or a dialog", FormDemo),
+        new("Confirm dialog", "y/n, or type the name; toggles like force", ConfirmDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -906,6 +907,64 @@ internal static class Demos
             .Add(new KeyHost(new Panel(form, "settings") { BorderStyle = BorderStyle.Rounded }, keymap), Constraint.Fill(3))
             .Add(new Label(StyledText.Empty()), Constraint.Length(2))
             .Add(right, Constraint.Fill(2));
+        return Padded(body);
+    }
+
+    // Previews of both kinds of ConfirmDialog; r and d open them for real.
+    private static Widget ConfirmDemo(DemoContext ctx)
+    {
+        static ConfirmDialog Restart() => new("Restart web on node-west-02?")
+        {
+            Details = [new StyledText("3 instances restart one at a time; requests drain first.", Theme.Current.TextStyle)],
+            Toggles = [new ConfirmToggle('f', "force: skip draining")],
+        };
+
+        static ConfirmDialog Delete() => new("Delete node node-west-02?")
+        {
+            Details = [new StyledText("Its 12 replicas move to other nodes first.", Theme.Current.TextStyle)],
+            Warning = "This can't be undone.",
+            Risk = ConfirmRisk.Destructive,
+            ConfirmText = "node-west-02",
+            Toggles = [new ConfirmToggle('f', "force: don't wait for replicas")],
+        };
+
+        var result = new Label(new StyledText("Press r or d.", Theme.Current.MutedStyle));
+        void Report(string what, ConfirmResult r) =>
+            result.Content = r.Confirmed
+                ? new StyledText($"{what}: confirmed", new Style(Theme.Current.Success, Color.Default)).Append(r.IsOn('f') ? " (forced)" : "", Theme.Current.MutedStyle)
+                : new StyledText($"{what}: cancelled", Theme.Current.MutedStyle);
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("restart", "Ask to restart", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                ConfirmDialog.Show(app, Restart(), r => Report("restart", r));
+            }
+        }) { Keys = ["r"] });
+        keymap.Add(new AppAction("delete", "Ask to delete", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                ConfirmDialog.Show(app, Delete(), r => Report("delete", r));
+            }
+        }) { Keys = ["d"] });
+
+        var restart = Restart();
+        var delete = Delete();
+        var note = new Label(new StyledText(
+            "r asks with y/n (f toggles force); d makes you type the node's name (alt+f toggles force). " +
+            "Esc cancels either. Below: what they look like.", Theme.Current.TextStyle)) { Wrap = true };
+        var previews = new Stack(Direction.Horizontal)
+            .Add(restart, Constraint.Length(48))
+            .Add(new Label(StyledText.Empty()), Constraint.Length(2))
+            .Add(delete, Constraint.Length(48))
+            .Add(new Label(StyledText.Empty()), Constraint.Fill());
+        var body = new Stack(Direction.Vertical)
+            .Add(new KeyHost(note, keymap), Constraint.Length(3))
+            .Add(result, Constraint.Length(2))
+            .Add(previews, Constraint.Length(Math.Max(restart.PreferredHeight(48), delete.PreferredHeight(48))))
+            .Add(new Label(StyledText.Empty()), Constraint.Fill());
         return Padded(body);
     }
 

@@ -40,6 +40,7 @@ internal static class Demos
         new("Progress", "sub-cell bars with labels (live)", Progress),
         new("Spinners", "indeterminate animations (live)", Spinners),
         new("Input & forms", "text fields, masking, live filter", Input),
+        new("Readline input", "ctrl+w, alt+b, ctrl+u… and ↑/↓ history", ReadlineInput),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -505,6 +506,45 @@ internal static class Demos
             .Add(new Rule(StyledText.Of("live filter (Tab to switch fields)")), Constraint.Length(1))
             .Add(new Panel(filter), Constraint.Length(3))
             .Add(new Padding(results, new Thickness(1, 0)), Constraint.Fill());
+        body.HasFocus = true;
+        return Padded(body);
+    }
+
+    // Every Input understands the readline keys, and browses an InputHistory with ↑/↓ when given one.
+    private static Widget ReadlineInput(DemoContext ctx)
+    {
+        var history = new InputHistory();
+        history.Load(["get nodes", "describe node _Node_3", "logs --tail 100 --follow"]);
+        var log = new Label(new StyledText("(submitted lines show here)", Theme.Current.MutedStyle)) { Wrap = true };
+        var lines = new List<string>();
+        var shell = new Input { Placeholder = "type a command, enter submits, ↑ recalls…", History = history };
+        shell.OnSubmit = text =>
+        {
+            lines.Insert(0, "❯ " + text);
+            log.Content = new StyledText(string.Join("\n", lines.Take(8)), Theme.Current.TextStyle);
+            shell.Text = "";
+        };
+
+        var keys = StyledText.Empty();
+        foreach (var (key, what) in new[]
+        {
+            ("ctrl+a / ctrl+e", "start / end of line"),
+            ("alt+b / alt+f, ctrl+← / ctrl+→", "word left / right"),
+            ("ctrl+w", "delete back to whitespace"),
+            ("alt+backspace / alt+d", "delete word back / forward"),
+            ("ctrl+u / ctrl+k", "delete to start / end"),
+            ("ctrl+y", "paste what was deleted"),
+            ("↑ / ↓", "browse history (keeps what you were typing)"),
+        })
+        {
+            keys.Append(key.PadRight(34)).Bold().Fg(Theme.Current.Accent).Append(what + "\n").Fg(Theme.Current.Muted);
+        }
+
+        var body = new Stack(Direction.Vertical)
+            .Add(new Panel(shell, "shell"), Constraint.Length(3))
+            .Add(new Padding(new Label(keys) { Wrap = true }, new Thickness(1, 1)), Constraint.Length(9))
+            .Add(new Rule(StyledText.Of("submitted")), Constraint.Length(1))
+            .Add(new Padding(log, new Thickness(1, 0)), Constraint.Fill());
         body.HasFocus = true;
         return Padded(body);
     }

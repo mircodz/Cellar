@@ -1,6 +1,6 @@
 # Cellar
 
-Cellar is a retained-mode terminal UI framework for .NET 8. It provides cell-diffed ANSI
+Cellar is a retained-mode terminal UI framework for .NET 10. It provides cell-diffed ANSI
 rendering, styled text, constraint-based layouts, themes, mouse and keyboard input, and a
 collection of interactive widgets.
 

@@ -49,10 +49,6 @@ public sealed class TableColumn<T>
     /// Null sorts by the cell's text. Rows whose key is null sort last.</summary>
     public Func<T, IComparable?>? SortKey { get; set; }
 
-    /// <summary>Other names a <see cref="TableQuery"/> accepts for this column, e.g. "ns" for "Namespace". The header
-    /// always works, ignoring case.</summary>
-    public IReadOnlyList<string> Aliases { get; set; } = [];
-
     public TableColumn(string header, Constraint width, Func<T, StyledText> render, Justify justify = Justify.Left)
     {
         Header = header;

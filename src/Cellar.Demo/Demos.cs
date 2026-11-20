@@ -16,7 +16,7 @@ namespace Cellar.Demo;
 internal readonly record struct TraceFrame(string Name, double Ms, double Percent, long Addr = 0);
 
 /// <summary>One row of the table views demo.</summary>
-internal sealed record DemoPod(string Name, string Phase, int Restarts, TimeSpan Age);
+internal sealed record DemoTask(string Name, string State, int Attempts, TimeSpan Age);
 
 /// <summary>One row of the table demo: where something allocates, and how much.</summary>
 internal sealed record AllocationSite(string Type, string Method, string Allocator, double MiB, int Count, double OwnPercent)
@@ -739,57 +739,67 @@ internal static class Demos
         return Padded(new KeyHost(body, keymap));
     }
 
-    // Table<T> as a live resource list: rows refresh every two seconds and keep the selection by RowKey (changed
-    // cells flash bold), "/" filters with a TableQuery, "g" groups by phase, space and * mark rows.
+    // Table<T> as a live task queue: rows refresh every two seconds and keep the selection by RowKey (changed
+    // cells flash bold), "/" filters as you type, "g" groups by state, space and * mark rows.
     private static Widget TableViews(DemoContext ctx)
     {
         var rng = new Random(11);
-        string[] phases = ["Running", "Running", "Running", "Pending", "Failed"];
-        var pods = Enumerable.Range(0, 40).Select(i => new DemoPod(
-            $"{(i % 4 == 0 ? "api" : i % 4 == 1 ? "web" : i % 4 == 2 ? "worker" : "db")}-{i:00}",
-            phases[rng.Next(phases.Length)], rng.Next(0, 6), TimeSpan.FromMinutes(rng.Next(1, 600)))).ToList();
+        string[] states = ["Running", "Running", "Done", "Queued", "Failed"];
+        string[] kinds = ["backup", "export", "resize", "sync"];
+        var tasks = Enumerable.Range(0, 40).Select(i => new DemoTask(
+            $"{kinds[i % kinds.Length]}-{i:00}",
+            states[rng.Next(states.Length)], rng.Next(0, 6), TimeSpan.FromMinutes(rng.Next(1, 600)))).ToList();
 
-        var table = new Table<DemoPod>
+        var table = new Table<DemoTask>
         {
             ShowHeader = true, Striped = true, ShowScrollbar = true, Sortable = true, HasFocus = true,
-            RowKey = p => p.Name, HighlightChanges = true, Markable = true,
-            EmptyText = new StyledText("no pods match"),
-            GroupSummary = g => new StyledText($"{g.Rows.Sum(p => p.Restarts)} restarts", Theme.Current.MutedStyle),
+            RowKey = t => t.Name, HighlightChanges = true, Markable = true,
+            EmptyText = new StyledText("no tasks match"),
+            GroupSummary = g => new StyledText($"{g.Rows.Sum(t => t.Attempts)} attempts", Theme.Current.MutedStyle),
         };
-        static Style PhaseStyle(string phase) => new(phase switch
+        static Style StateStyle(string state) => new(state switch
         {
-            "Running" => Theme.Current.Success,
-            "Pending" => Theme.Current.Warning,
+            "Running" => Theme.Current.Info,
+            "Done" => Theme.Current.Success,
+            "Queued" => Theme.Current.Warning,
             _ => Theme.Current.Error,
         }, Color.Default);
-        table.Columns.Add(new TableColumn<DemoPod>("Name", Constraint.Fill(2), p => p.Name));
-        table.Columns.Add(new TableColumn<DemoPod>("Phase", Constraint.Length(9), p => new StyledText(p.Phase, PhaseStyle(p.Phase))) { Aliases = ["status", "st"] });
-        table.Columns.Add(new TableColumn<DemoPod>("Restarts", Constraint.Length(9), p => p.Restarts.ToString(CultureInfo.InvariantCulture), Justify.Right) { SortKey = p => p.Restarts, Aliases = ["r"] });
-        table.Columns.Add(new TableColumn<DemoPod>("Age", Constraint.Length(8), p => FormatAge(p.Age), Justify.Right) { SortKey = p => p.Age });
-        table.SetRows(pods);
+        table.Columns.Add(new TableColumn<DemoTask>("Name", Constraint.Fill(2), t => t.Name));
+        table.Columns.Add(new TableColumn<DemoTask>("State", Constraint.Length(9), t => new StyledText(t.State, StateStyle(t.State))));
+        table.Columns.Add(new TableColumn<DemoTask>("Attempts", Constraint.Length(9), t => t.Attempts.ToString(CultureInfo.InvariantCulture), Justify.Right) { SortKey = t => t.Attempts });
+        table.Columns.Add(new TableColumn<DemoTask>("Age", Constraint.Length(8), t => FormatAge(t.Age), Justify.Right) { SortKey = t => t.Age });
+        table.SetRows(tasks);
 
         var keymap = new Keymap();
         var line = new CommandLine();
         var count = line.Status.Add(new StatusItem("", priority: 10));
         line.Status.Keymap = keymap;
-        void UpdateCount() => count.Text = new StyledText($"{table.FilteredRows.Count}/{pods.Count} pods", Theme.Current.MutedStyle)
+        string query = "";
+        void UpdateCount() => count.Text = new StyledText($"{table.FilteredRows.Count}/{tasks.Count} tasks", Theme.Current.MutedStyle)
             .Append(table.Marked.Count > 0 ? $"  {table.Marked.Count} marked" : "", Theme.Current.AccentStyle)
-            .Append(table.Query is { IsEmpty: false } q ? $"  /{q.Text}" : "", Theme.Current.AccentStyle);
+            .Append(query.Length > 0 ? $"  /{query}" : "", Theme.Current.AccentStyle);
         table.OnMarksChanged = UpdateCount;
+
+        void SetFilter(string text)
+        {
+            query = text;
+            table.Filter = text.Length == 0 ? null : t => table.ContainsText(t, text);
+            UpdateCount();
+        }
 
         var filter = new CommandMode("/")
         {
             History = new InputHistory(),
-            Placeholder = "phase=running restarts>2 age<1h web …",
-            OnChange = text => { table.Query = TableQuery.Parse(text); UpdateCount(); },
-            OnCancel = () => { table.Query = null; UpdateCount(); },
+            Placeholder = "text in any column, e.g. failed or backup",
+            OnChange = SetFilter,
+            OnCancel = () => SetFilter(""),
         };
-        keymap.Add(new AppAction("filter", "Filter", () => line.Open(filter, table.Query?.Text ?? "")) { Keys = ["/"], Footer = "filter", Priority = 4 });
-        keymap.Add(new AppAction("group", "Group by phase", () =>
+        keymap.Add(new AppAction("filter", "Filter", () => line.Open(filter, query)) { Keys = ["/"], Footer = "filter", Priority = 4 });
+        keymap.Add(new AppAction("group", "Group by state", () =>
         {
             if (table.GroupColumn < 0)
             {
-                table.GroupBy("Phase");
+                table.GroupBy("State");
             }
             else
             {
@@ -798,21 +808,21 @@ internal static class Demos
         }) { Keys = ["g"], Footer = "group", Priority = 3 });
         keymap.Add(new AppAction("mark", "Mark", () =>
         {
-            if (table.Selected is { } pod)
+            if (table.Selected is { } task)
             {
-                table.ToggleMark(pod);
+                table.ToggleMark(task);
             }
         }) { Keys = ["space"], Footer = "mark", Priority = 2 });
-        keymap.Add(new AppAction("delete", "Delete marked", () =>
+        keymap.Add(new AppAction("delete", "Remove marked", () =>
         {
-            var doomed = table.Marked.Select(p => p.Name).ToHashSet();
-            pods.RemoveAll(p => doomed.Contains(p.Name));
-            table.SetRows(pods);
-            line.Status.Show($"Deleted {doomed.Count} pods", StatusLevel.Success);
+            var doomed = table.Marked.Select(t => t.Name).ToHashSet();
+            tasks.RemoveAll(t => doomed.Contains(t.Name));
+            table.SetRows(tasks);
+            line.Status.Show($"Removed {doomed.Count} tasks", StatusLevel.Success);
             UpdateCount();
-        }) { Keys = ["ctrl+d"], Footer = "delete marked", Priority = 1, When = () => table.Marked.Count > 0 });
+        }) { Keys = ["ctrl+d"], Footer = "remove marked", Priority = 1, When = () => table.Marked.Count > 0 });
 
-        // Every two seconds a few pods restart or change phase, and now and then one is replaced.
+        // Every two seconds a few tasks retry or change state, and now and then one finishes and a new one queues.
         int ticks = 0;
         ctx.Tick += _ =>
         {
@@ -821,20 +831,20 @@ internal static class Demos
                 return;
             }
 
-            for (int i = 0; i < 3 && pods.Count > 0; i++)
+            for (int i = 0; i < 3 && tasks.Count > 0; i++)
             {
-                int at = rng.Next(pods.Count);
-                pods[at] = pods[at] with { Restarts = pods[at].Restarts + 1, Phase = phases[rng.Next(phases.Length)] };
+                int at = rng.Next(tasks.Count);
+                tasks[at] = tasks[at] with { Attempts = tasks[at].Attempts + 1, State = states[rng.Next(states.Length)] };
             }
 
-            if (rng.Next(3) == 0 && pods.Count > 0)
+            if (rng.Next(3) == 0 && tasks.Count > 0)
             {
-                pods.RemoveAt(rng.Next(pods.Count));
-                pods.Add(new DemoPod($"job-{ticks / 25:000}", "Pending", 0, TimeSpan.Zero));
+                tasks.RemoveAt(rng.Next(tasks.Count));
+                tasks.Add(new DemoTask($"upload-{ticks / 25:000}", "Queued", 0, TimeSpan.Zero));
             }
 
-            pods = pods.Select(p => p with { Age = p.Age + TimeSpan.FromSeconds(2) }).ToList();
-            table.SetRows(pods);
+            tasks = tasks.Select(t => t with { Age = t.Age + TimeSpan.FromSeconds(2) }).ToList();
+            table.SetRows(tasks);
             UpdateCount();
         };
 

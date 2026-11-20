@@ -18,7 +18,7 @@ public sealed record TableGroup<T>(string Value, IReadOnlyList<T> Rows, bool Col
 /// </summary>
 /// <remarks>
 /// <para>On top of <see cref="TableBase{TRow}.Rows"/>, which always holds every row (in sort order), the table can
-/// show a subset: <see cref="Filter"/> and <see cref="Query"/> hide rows, and <see cref="GroupBy(int)"/> puts rows
+/// show a subset: <see cref="Filter"/> hides rows, and <see cref="GroupBy(int)"/> puts rows
 /// under collapsible header lines. <see cref="TableBase{TRow}.SelectedIndex"/> then counts lines on screen; use
 /// <see cref="Selected"/> for the row. The view is rebuilt when any of those change, on <see cref="TableBase{TRow}.SetRows"/>
 /// and sorting, and when the number of rows changes; after editing <see cref="TableBase{TRow}.Rows"/> in place, call
@@ -39,7 +39,6 @@ public sealed class Table<T> : TableBase<T>
     private bool _viewDirty = true;
     private int _viewRowCount = -1;
     private Func<T, bool>? _filter;
-    private TableQuery? _query;
     private int _groupColumn = -1;
 
     // Change tracking (with a RowKey): each row's cell texts from the last SetRows, and per-row flags for drawing.
@@ -78,12 +77,25 @@ public sealed class Table<T> : TableBase<T>
         set => ChangeView(() => _filter = value);
     }
 
-    /// <summary>A parsed query (see <see cref="TableQuery"/>) that rows must also match, e.g. from a "/" prompt:
-    /// <c>table.Query = TableQuery.Parse(text)</c>. Null or empty shows every row.</summary>
-    public TableQuery? Query
+    /// <summary>Whether any column's text for <paramref name="row"/> contains <paramref name="text"/>, ignoring
+    /// case: what a plain "/" filter wants, <c>table.Filter = row => table.ContainsText(row, typed)</c>. Matches
+    /// what's drawn, so it finds "2 days" in an age column but not the date behind it.</summary>
+    public bool ContainsText(T row, string text)
     {
-        get => _query;
-        set => ChangeView(() => _query = value);
+        if (string.IsNullOrEmpty(text))
+        {
+            return true;
+        }
+
+        foreach (var column in Columns)
+        {
+            if (column.Render(row).PlainText.Contains(text, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>The column rows are grouped by, or -1.</summary>
@@ -103,7 +115,7 @@ public sealed class Table<T> : TableBase<T>
     /// <summary>Raised when marks change through keys or the mark methods.</summary>
     public Action? OnMarksChanged { get; set; }
 
-    private bool ViewActive => _filter is not null || _query is { IsEmpty: false } || (_groupColumn >= 0 && _groupColumn < Columns.Count);
+    private bool ViewActive => _filter is not null || (_groupColumn >= 0 && _groupColumn < Columns.Count);
 
     /// <summary>The selected row, or default when nothing (or a group header) is selected.</summary>
     public T? Selected => RowIndexOf(SelectedIndex) is int r and >= 0 ? Rows[r] : default;
@@ -123,7 +135,7 @@ public sealed class Table<T> : TableBase<T>
         }
     }
 
-    /// <summary>The rows that pass <see cref="Filter"/> and <see cref="Query"/>, in display order, including those in
+    /// <summary>The rows that pass <see cref="Filter"/>, in display order, including those in
     /// collapsed groups.</summary>
     public IReadOnlyList<T> FilteredRows
     {
@@ -542,13 +554,12 @@ public sealed class Table<T> : TableBase<T>
         _viewRowCount = Rows.Count;
         _lines.Clear();
         _groups.Clear();
-        var query = _query is { IsEmpty: false } q ? q : null;
         bool grouped = _groupColumn >= 0 && _groupColumn < Columns.Count;
         Dictionary<string, int>? byValue = grouped ? new(StringComparer.Ordinal) : null;
         for (int i = 0; i < Rows.Count; i++)
         {
             var row = Rows[i];
-            if ((_filter is not null && !_filter(row)) || (query is not null && !query.Matches(row, Columns)))
+            if (_filter is not null && !_filter(row))
             {
                 continue;
             }

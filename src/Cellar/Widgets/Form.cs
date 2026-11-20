@@ -159,7 +159,7 @@ public sealed class FormField
 
                 break;
             case FormFieldKind.Duration:
-                if (!TableQuery.TryDuration(value, out _))
+                if (!TryParseDuration(value, out _))
                 {
                     return "expected a duration like 30s, 5m or 1h30m";
                 }
@@ -207,6 +207,67 @@ public sealed class FormField
         }
 
         return _masked;
+    }
+
+    /// <summary>Parses what a <see cref="FormFieldKind.Duration"/> field accepts: <c>90s</c>, <c>5m</c>,
+    /// <c>1h30m</c>, <c>2d</c>, <c>250ms</c>, <c>1w</c>, or a <see cref="TimeSpan"/> like <c>00:05:00</c>. Values
+    /// come back from the form as text, so this turns them into a <see cref="TimeSpan"/>.</summary>
+    public static bool TryParseDuration(string text, out TimeSpan duration)
+    {
+        duration = TimeSpan.Zero;
+        var s = text.Trim();
+        if (s.Length == 0)
+        {
+            return false;
+        }
+
+        if (s.Contains(':', StringComparison.Ordinal))
+        {
+            return TimeSpan.TryParse(s, CultureInfo.InvariantCulture, out duration);
+        }
+
+        int i = 0;
+        bool any = false;
+        while (i < s.Length)
+        {
+            int start = i;
+            while (i < s.Length && (char.IsDigit(s[i]) || s[i] == '.'))
+            {
+                i++;
+            }
+
+            if (i == start || !double.TryParse(s.AsSpan(start, i - start), NumberStyles.Float, CultureInfo.InvariantCulture, out double amount))
+            {
+                return false;
+            }
+
+            int unitStart = i;
+            while (i < s.Length && char.IsLetter(s[i]))
+            {
+                i++;
+            }
+
+            var unit = s[unitStart..i].ToLowerInvariant();
+            TimeSpan? part = unit switch
+            {
+                "ms" => TimeSpan.FromMilliseconds(amount),
+                "s" or "sec" or "secs" => TimeSpan.FromSeconds(amount),
+                "m" or "min" or "mins" => TimeSpan.FromMinutes(amount),
+                "h" or "hr" or "hrs" => TimeSpan.FromHours(amount),
+                "d" or "day" or "days" => TimeSpan.FromDays(amount),
+                "w" => TimeSpan.FromDays(7 * amount),
+                _ => null,
+            };
+            if (part is null)
+            {
+                return false;
+            }
+
+            duration += part.Value;
+            any = true;
+        }
+
+        return any;
     }
 
     private static string Format(double value) => value.ToString(CultureInfo.InvariantCulture);

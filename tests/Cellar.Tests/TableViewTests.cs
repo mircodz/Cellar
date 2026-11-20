@@ -8,6 +8,7 @@ using Cellar.Primitives;
 using Cellar.Rendering;
 using Cellar.Terminal;
 using Cellar.Text;
+using Cellar.Theming;
 using Cellar.Widgets;
 using Xunit;
 
@@ -249,6 +250,25 @@ public class TableViewTests
         t.Select(0);
         Assert.False(t.HasSelectedRow);
         Assert.Equal("Pending", t.SelectedGroup!.Value);
+    }
+
+    [Fact]
+    public void GroupHeaders_OnStripedLines_KeepTheStripeUnderTheirText()
+    {
+        var t = JobTable();
+        t.Striped = true;
+        t.SetRows(Jobs(6));
+        t.GroupBy("state");
+        t.Select(1);
+
+        // Lines: Pending header (0), job-00, job-03, Running header (3, striped), ...; the header shows on screen row 4.
+        var s = Draw(t, 40, 10);
+        Assert.StartsWith("▾ Running", SurfaceText.Row(s, 4));
+        var stripe = Theme.Current.StripeBackground;
+        for (int x = 0; x < 40; x++)
+        {
+            Assert.Equal(stripe, s.Get(x, 4).Style.Background);
+        }
     }
 
     [Fact]

@@ -373,17 +373,23 @@ public sealed class Table<T> : TableBase<T>
         }
 
         var content = col.Render(row);
+        TextRenderer.DrawLine(surface, cell.X, cell.Y, cell.Width, OnRow(content, style, selected), col.Justify);
+    }
+
+    /// <summary>The selection's colors win; elsewhere a span keeps its own colors and takes the row's (a stripe,
+    /// say) where it has none, so text never punches a hole in the row's background.</summary>
+    private static StyledText OnRow(StyledText content, Style style, bool selected)
+    {
         var drawn = StyledText.Empty();
         foreach (var span in content.Spans)
         {
-            // The selection's colors win; elsewhere a span keeps its own and takes the row's where it has none.
             var own = span.Style;
             drawn.Append(span.WithStyle(selected ? style : new Style(
                 own.Foreground.IsDefault ? style.Foreground : own.Foreground,
                 own.Background.IsDefault ? style.Background : own.Background,
                 own.Attributes | style.Attributes)));
         }
-        TextRenderer.DrawLine(surface, cell.X, cell.Y, cell.Width, drawn, col.Justify);
+        return drawn;
     }
 
     private protected override void DrawGutter(Surface surface, Rect gutter, T row, Style style, bool selected)
@@ -397,7 +403,7 @@ public sealed class Table<T> : TableBase<T>
     private protected override void DrawLine(Surface surface, Rect line, int index, Style style, bool selected)
     {
         var group = _groups[~_lines[index]];
-        TextRenderer.DrawLine(surface, line.X, line.Y, line.Width, selected ? group.SelectedHeader : group.Header, Justify.Left);
+        TextRenderer.DrawLine(surface, line.X, line.Y, line.Width, selected ? group.SelectedHeader : OnRow(group.Header, style, selected: false), Justify.Left);
     }
 
     private protected override bool HandleExtraKey(Terminal.KeyEvent key)

@@ -103,6 +103,7 @@ public static class PrettyPrint
             element.AddFirst(new XText(string.Empty));
         }
 
+        bool hasChildElements = element.Elements().Any();
         var current = element.FirstNode;
         while (current is not null)
         {
@@ -111,7 +112,7 @@ public static class PrettyPrint
             {
                 DropIndentation(child);
             }
-            else if (!mixed && current is XText)
+            else if (hasChildElements && !mixed && current is XText)
             {
                 current.Remove();
             }

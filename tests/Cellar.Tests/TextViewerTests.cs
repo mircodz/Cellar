@@ -335,6 +335,7 @@ public class TextViewerTests
             "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<library>\n  <!-- favorites -->\n  <track id=\"1\">Song</track>\n</library>",
             PrettyPrint.Xml(xml));
         Assert.Equal("<a><b></a>", PrettyPrint.Xml("<a><b></a>"));
+        Assert.Equal("<value>\n  </value>", PrettyPrint.Xml("<value>\n  </value>"));
     }
 
     [Fact]

@@ -199,4 +199,37 @@ public class StatusLineTests
         Assert.Equal(Color.Rgb(200, 0, 0), surface.Get(1, 0).Style.Foreground);
         Assert.Equal(Color.Rgb(9, 9, 9), surface.Get(1, 0).Style.Background);
     }
+
+    [Fact]
+    public void Hints_LeaveOutActionsWhoseKeysAreTakenAndFollowTheTheme()
+    {
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("describe", "Describe", () => { }) { Keys = ["d"], Footer = "describe" });
+        keymap.AddScope("page").Add(new AppAction("delete", "Delete", () => { }) { Keys = ["d"], Footer = "delete" });
+        var line = new StatusLine { Keymap = keymap };
+        Assert.Equal("d delete", Line(line, 20).Trim());
+
+        var previous = Theming.Theme.Current;
+        try
+        {
+            Theming.Theme.Current = Theming.BuiltIn.Dark;
+            SurfaceText.Render(line, 20);
+            Theming.Theme.Current = Theming.BuiltIn.Light;
+            var surface = SurfaceText.Render(line, 20);
+            Assert.Equal(Theming.BuiltIn.Light.Accent, surface.Get(SurfaceText.Row(surface, 0).IndexOf('d'), 0).Style.Foreground);
+        }
+        finally
+        {
+            Theming.Theme.Current = previous;
+        }
+    }
+
+    [Fact]
+    public void Spinner_FallsBackToItsGlyphWhenTheLabelDoesNotFit()
+    {
+        var line = new StatusLine();
+        var spinner = (SpinnerStatusItem)line.Add(new SpinnerStatusItem("loading everything"));
+        spinner.Active = true;
+        Assert.Equal(1, Line(line, 8).Trim().Length); // just the glyph, not dropped
+    }
 }

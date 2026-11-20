@@ -371,4 +371,15 @@ public class TableViewTests
         Assert.False(t.OnEvent(C(' ')));
         Assert.Empty(t.Marked);
     }
+
+    [Fact]
+    public void EmptyText_MutatedInPlace_IsRedrawn()
+    {
+        var t = JobTable();
+        var empty = new StyledText("loading");
+        t.EmptyText = empty;
+        Assert.Contains("loading", SurfaceText.Row(Draw(t, 21, 3), 1), StringComparison.Ordinal);
+        empty.Append("…done");
+        Assert.Contains("loading…done", SurfaceText.Row(Draw(t, 21, 3), 1), StringComparison.Ordinal);
+    }
 }

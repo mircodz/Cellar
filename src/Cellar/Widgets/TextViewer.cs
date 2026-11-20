@@ -36,6 +36,8 @@ public sealed class TextViewer : Widget
     private readonly List<int> _rowStarts = new(); // first wrapped row of each line, plus the total at the end
     private readonly Input _prompt = new();
     private Func<string, StyledText>? _highlighter;
+    private bool _supplied; // the lines came styled from SetLines, rather than being styled here
+    private Theme? _styledTheme; // the theme the lines styled here were styled with
     private int _rowWidth = -1; // the width _rowStarts was computed for, -1 when stale
     private int _topRow;
     private int _left;
@@ -69,6 +71,7 @@ public sealed class TextViewer : Widget
             _plain.Clear();
             _widths.Clear();
             _styled.Clear();
+            _supplied = false;
             foreach (var line in (value ?? string.Empty).Split('\n'))
             {
                 AddLine(ExpandTabs(line.EndsWith('\r') ? line[..^1] : line), null);
@@ -85,6 +88,7 @@ public sealed class TextViewer : Widget
         _plain.Clear();
         _widths.Clear();
         _styled.Clear();
+        _supplied = true;
         foreach (var line in lines)
         {
             AddLine(line.PlainText, line);
@@ -101,10 +105,21 @@ public sealed class TextViewer : Widget
         set
         {
             _highlighter = value;
-            for (int i = 0; i < _styled.Count; i++)
-            {
-                _styled[i] = null;
-            }
+            ForgetStyles();
+        }
+    }
+
+    // Drops the styles made here (not those given to SetLines), so lines are styled again as they're drawn.
+    private void ForgetStyles()
+    {
+        if (_supplied)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _styled.Count; i++)
+        {
+            _styled[i] = null;
         }
     }
 
@@ -275,6 +290,12 @@ public sealed class TextViewer : Widget
         }
 
         var theme = Theme.Current;
+        if (!ReferenceEquals(theme, _styledTheme))
+        {
+            _styledTheme = theme;
+            ForgetStyles();
+        }
+
         bool footer = (IsSearching || Search.Length > 0 || _note is not null) && area.Height > 1;
         var body = new Rect(area.X, area.Y, area.Width, area.Height - (footer ? 1 : 0));
         int gutter = ShowLineNumbers ? Digits(_plain.Count) + 1 : 0;

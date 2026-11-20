@@ -145,6 +145,7 @@ public abstract class TableBase<TRow> : Widget
 
     private StyledText? _emptySource;
     private StyledText? _emptyDrawn;
+    private int _emptyVersion;
     private Color _emptyColor;
     private bool _replacing;
 
@@ -483,9 +484,10 @@ public abstract class TableBase<TRow> : Widget
     private void DrawEmpty(Surface surface, Rect line, StyledText empty)
     {
         var muted = Theming.Theme.Current.Muted;
-        if (!ReferenceEquals(empty, _emptySource) || !_emptyColor.Equals(muted))
+        if (!ReferenceEquals(empty, _emptySource) || empty.Version != _emptyVersion || !_emptyColor.Equals(muted))
         {
             _emptySource = empty;
+            _emptyVersion = empty.Version;
             _emptyColor = muted;
             _emptyDrawn = StyledText.Empty();
             foreach (var span in empty.Spans)

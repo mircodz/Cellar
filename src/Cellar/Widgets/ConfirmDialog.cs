@@ -67,13 +67,14 @@ public sealed record ConfirmResult(bool Confirmed, IReadOnlyList<ConfirmToggle> 
 public sealed class ConfirmDialog : Widget
 {
     private readonly Input _input = new();
-    private readonly Label _body = new(StyledText.Empty()) { Wrap = true };
+    private readonly BodyView _body = new();
     private Panel? _panel;
     private DialogBody? _frame;
     private bool _mismatch;
     private bool _dirty = true;
     private App? _app;
     private Overlay? _overlay;
+    private string _headline = string.Empty;
 
     public ConfirmDialog(string headline)
     {
@@ -86,7 +87,15 @@ public sealed class ConfirmDialog : Widget
     }
 
     /// <summary>The question, drawn bold at the top.</summary>
-    public string Headline { get; set; }
+    public string Headline
+    {
+        get => _headline;
+        set
+        {
+            _headline = value;
+            _dirty = true;
+        }
+    }
 
     /// <summary>Lines about what will happen, under the headline.</summary>
     public IReadOnlyList<StyledText> Details { get; init; } = [];
@@ -174,7 +183,7 @@ public sealed class ConfirmDialog : Widget
     /// <summary>Confirms, if what was typed matches (for a destructive dialog); else says it doesn't.</summary>
     public bool Confirm()
     {
-        if (Typed && !string.Equals(_input.Text.Trim(), ConfirmText, StringComparison.Ordinal))
+        if (Typed && !string.Equals(_input.Text.Trim(), ConfirmText.Trim(), StringComparison.Ordinal))
         {
             _mismatch = true;
             _dirty = true;
@@ -208,9 +217,32 @@ public sealed class ConfirmDialog : Widget
             return _input.OnEvent(e);
         }
 
+        if (e is MouseEvent { Kind: MouseEventKind.Wheel } wheel)
+        {
+            _body.Scroll(wheel.Button == MouseButton.WheelUp ? -3 : 3);
+            return true;
+        }
+
         if (e is not KeyEvent key)
         {
             return false;
+        }
+
+        // Long details can be taller than the dialog: these scroll them, so nothing is confirmed unread.
+        switch (key.Key)
+        {
+            case Key.Up:
+                _body.Scroll(-1);
+                return true;
+            case Key.Down:
+                _body.Scroll(1);
+                return true;
+            case Key.PageUp:
+                _body.Scroll(-_body.Page);
+                return true;
+            case Key.PageDown:
+                _body.Scroll(_body.Page);
+                return true;
         }
 
         switch (key.Key)
@@ -325,6 +357,63 @@ public sealed class ConfirmDialog : Widget
         }
 
         return text;
+    }
+
+    // The dialog's text, wrapped once per size, with a scrollbar when it's taller than the room it has.
+    private sealed class BodyView : Widget
+    {
+        private StyledText _content = StyledText.Empty();
+        private List<StyledText>? _lines;
+        private Size _size;
+        private bool _overflow;
+        private int _offset;
+
+        public StyledText Content
+        {
+            get => _content;
+            set
+            {
+                _content = value;
+                _lines = null;
+            }
+        }
+
+        public int Page => Math.Max(1, _size.Height - 1);
+
+        // Clamped to the content when drawn.
+        public void Scroll(int delta) => _offset = Math.Max(0, _offset + delta);
+
+        public override void Render(Surface surface, Rect area)
+        {
+            if (area.IsEmpty)
+            {
+                return;
+            }
+
+            if (_lines is null || _size != area.Size)
+            {
+                _size = area.Size;
+                _lines = TextRenderer.Wrap(_content, area.Width);
+                _overflow = _lines.Count > area.Height && area.Width > 1;
+                if (_overflow)
+                {
+                    _lines = TextRenderer.Wrap(_content, area.Width - 1);
+                }
+            }
+
+            var lines = _lines;
+            _offset = Math.Min(_offset, Math.Max(0, lines.Count - area.Height));
+            int width = _overflow ? area.Width - 1 : area.Width;
+            for (int row = 0; row < area.Height && _offset + row < lines.Count; row++)
+            {
+                TextRenderer.DrawLine(surface, area.X, area.Y + row, width, lines[_offset + row], Justify.Left);
+            }
+
+            if (_overflow)
+            {
+                Scrollbar.Default.Render(surface, new Rect(area.Right - 1, area.Y, 1, area.Height), _offset, area.Height, lines.Count);
+            }
+        }
     }
 
     private StyledText HintText()

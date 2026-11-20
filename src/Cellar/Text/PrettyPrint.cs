@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -58,7 +59,15 @@ public static class PrettyPrint
 
         try
         {
-            var document = XDocument.Parse(xml);
+            // Whitespace is kept while parsing so that mixed content (`<b>Hello</b> <b>world</b>`) keeps its spaces;
+            // only the line-breaking whitespace that merely indented the source is dropped.
+            var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            document.Nodes().OfType<XText>().Remove();
+            if (document.Root is { } root)
+            {
+                DropIndentation(root);
+            }
+
             string body = document.ToString().Replace("\r\n", "\n");
             return document.Declaration is { } declaration ? declaration + "\n" + body : body;
         }
@@ -67,6 +76,52 @@ public static class PrettyPrint
             return xml;
         }
     }
+
+    // Removes the text of an element whose text is all indentation (whitespace with a line break); an element with
+    // any other text is mixed content, which is kept exactly as written and so isn't re-indented.
+    private static void DropIndentation(XElement element)
+    {
+        if ((string?)element.Attribute(XNamespace.Xml + "space") == "preserve")
+        {
+            return;
+        }
+
+        bool mixed = false;
+        for (var node = element.FirstNode; node is not null; node = node.NextNode)
+        {
+            if (node is XText text && (text is XCData || !IsIndentation(text.Value)))
+            {
+                mixed = true;
+                break;
+            }
+        }
+
+        if (mixed && element.FirstNode is not XText)
+        {
+            // The writer only stops indenting at the first text, so an empty one up front keeps it from
+            // breaking the line before a leading child.
+            element.AddFirst(new XText(string.Empty));
+        }
+
+        var current = element.FirstNode;
+        while (current is not null)
+        {
+            var next = current.NextNode;
+            if (current is XElement child)
+            {
+                DropIndentation(child);
+            }
+            else if (!mixed && current is XText)
+            {
+                current.Remove();
+            }
+
+            current = next;
+        }
+    }
+
+    private static bool IsIndentation(string text) =>
+        text.Contains('\n') && string.IsNullOrWhiteSpace(text);
 
     /// <summary>Pretty-prints <paramref name="text"/> as JSON if it looks like JSON (starts with <c>{</c> or
     /// <c>[</c>), as XML if it starts with <c>&lt;</c>, and otherwise returns it unchanged.</summary>

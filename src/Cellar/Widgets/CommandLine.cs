@@ -58,6 +58,7 @@ public sealed class CommandMode
 public sealed class CommandLine : Widget
 {
     private IReadOnlyList<CompletionItem> _candidates = Array.Empty<CompletionItem>();
+    private string? _ghost; // the candidate the ghost text completes to
     private int _cycle = -1; // index into _candidates while tab-cycling, else -1
     private bool _cycling;
     private bool _showError;
@@ -151,6 +152,7 @@ public sealed class CommandLine : Widget
         Input.HasFocus = false;
         Input.History = null;
         Input.Suggestion = null;
+        _ghost = null;
         _candidates = Array.Empty<CompletionItem>();
         _cycle = -1;
         _cycling = false;
@@ -198,7 +200,17 @@ public sealed class CommandLine : Widget
 
         if (right > x)
         {
-            Input.Render(surface, new Rect(x, area.Y, right - x, 1));
+            var field = new Rect(x, area.Y, right - x, 1);
+            if (mode.Placeholder.Length > 0 && Input.RuneCount == 0)
+            {
+                // The focused input hides its own placeholder, so draw it here, under the caret.
+                var clip = surface.Clip;
+                surface.SetClip(field.Intersect(clip));
+                surface.DrawText(x, area.Y, mode.Placeholder, Input.PlaceholderStyle ?? new Style(theme.Muted, Color.Default));
+                surface.SetClip(clip);
+            }
+
+            Input.Render(surface, field);
         }
 
         if (ShowCompletionPopup && (_cycling || Input.Text.Length > 0) && _candidates.Count > 0)
@@ -210,7 +222,13 @@ public sealed class CommandLine : Widget
     // A box of candidates sitting on top of the line, starting under the prompt text.
     private void RenderPopup(Surface surface, int x, Rect area, Theme theme)
     {
-        int rows = Math.Min(_candidates.Count, Math.Max(1, MaxPopupItems));
+        // As many rows as fit above the line, border included.
+        int rows = Math.Min(Math.Min(_candidates.Count, Math.Max(1, MaxPopupItems)), area.Y - surface.Bounds.Y - 2);
+        if (rows < 1)
+        {
+            return;
+        }
+
         int textWidth = 0, noteWidth = 0;
         for (int i = 0; i < rows; i++)
         {
@@ -224,8 +242,9 @@ public sealed class CommandLine : Widget
         int height = rows + 2;
         int left = Math.Max(area.X, Math.Min(x - 2, area.Right - width));
         int top = area.Y - height;
+        // Clipped to the screen, not to the caller's clip: that usually covers just this line, not the rows above.
         var clip = surface.Clip;
-        var box = new Rect(left, top, width, height).Intersect(clip);
+        var box = new Rect(left, top, width, height).Intersect(surface.Bounds);
         if (box.IsEmpty || width < 6)
         {
             return;
@@ -323,9 +342,9 @@ public sealed class CommandLine : Widget
                     Cycle((key.Modifiers & KeyModifiers.Shift) != 0 ? -1 : 1);
                     return true;
 
-                case { Key: Key.Right, Modifiers: KeyModifiers.None } when Input.CursorPosition == Input.Text.Length && Input.Suggestion is { Length: > 0 } ghost:
-                    Input.Text += ghost;
-                    OnInputChanged(Input.Text);
+                case { Key: Key.Right, Modifiers: KeyModifiers.None } when Input.CursorPosition == Input.RuneCount && Input.Suggestion is { Length: > 0 } && _ghost is { } ghost:
+                    Input.Text = ghost; // the candidate as written, whatever case was typed
+                    OnInputChanged(ghost);
                     return true;
             }
         }
@@ -388,12 +407,14 @@ public sealed class CommandLine : Widget
         string text = Input.Text;
         _candidates = Mode?.Completion?.Complete(text) ?? (IReadOnlyList<CompletionItem>)Array.Empty<CompletionItem>();
         Input.Suggestion = null;
+        _ghost = null;
         if (text.Length > 0)
         {
             foreach (var candidate in _candidates)
             {
                 if (candidate.Text.Length > text.Length && candidate.Text.StartsWith(text, StringComparison.OrdinalIgnoreCase))
                 {
+                    _ghost = candidate.Text;
                     Input.Suggestion = candidate.Text[text.Length..];
                     break;
                 }

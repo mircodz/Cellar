@@ -347,4 +347,52 @@ public class TextViewerTests
         Assert.Equal((System.Func<string, StyledText>)TextHighlighters.Xml, PrettyPrint.HighlighterFor("<a/>"));
         Assert.Null(PrettyPrint.HighlighterFor("plain"));
     }
+
+    [Fact]
+    public void PrettyPrint_Xml_KeepsSpacesBetweenInlineElements()
+    {
+        Assert.Equal("<p><b>Hello</b> <b>world</b></p>", PrettyPrint.Xml("<p><b>Hello</b> <b>world</b></p>"));
+        Assert.Equal("<a>\n  <b>x</b>\n</a>", PrettyPrint.Xml("<a>\n      <b>x</b>\n</a>"));
+        Assert.Equal("<a>\n  <p><b>x</b> y</p>\n</a>", PrettyPrint.Xml("<a><p><b>x</b> y</p></a>"));
+    }
+
+    [Fact]
+    public void SuppliedLines_KeepTheirStyles_WhenTheHighlighterOrThemeChanges()
+    {
+        var red = new Style(Color.Rgb(200, 0, 0), Color.Default);
+        var viewer = new TextViewer();
+        viewer.SetLines([new StyledText("hot", red)]);
+        viewer.Highlighter = TextHighlighters.Json;
+        Assert.Equal(red.Foreground, SurfaceText.Render(viewer, 10, 1).Get(0, 0).Style.Foreground);
+
+        var previous = Theme.Current;
+        try
+        {
+            Theme.Current = BuiltIn.Light;
+            Assert.Equal(red.Foreground, SurfaceText.Render(viewer, 10, 1).Get(0, 0).Style.Foreground);
+        }
+        finally
+        {
+            Theme.Current = previous;
+        }
+    }
+
+    [Fact]
+    public void HighlightedText_IsRestyledWhenTheThemeChanges()
+    {
+        var previous = Theme.Current;
+        try
+        {
+            Theme.Current = BuiltIn.Dark;
+            var viewer = new TextViewer { Highlighter = TextHighlighters.Json, Text = "{\"a\": 1}" };
+            var before = SurfaceText.Render(viewer, 20, 1).Get(1, 0).Style.Foreground;
+            Theme.Current = BuiltIn.Light;
+            var after = SurfaceText.Render(viewer, 20, 1).Get(1, 0).Style.Foreground;
+            Assert.NotEqual(before, after);
+        }
+        finally
+        {
+            Theme.Current = previous;
+        }
+    }
 }

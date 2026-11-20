@@ -32,6 +32,7 @@ public sealed class Activity
     private readonly object _gate = new();
     private readonly List<ActivityTask> _tasks = new(); // in start order
     private long _nextId;
+    private long _endings;
     private int _keepFinished = 50;
 
     public Activity(TimeProvider? clock = null) => Clock = clock ?? TimeProvider.System;
@@ -45,10 +46,16 @@ public sealed class Activity
         get => _keepFinished;
         set
         {
+            bool trimmed;
             lock (_gate)
             {
                 _keepFinished = Math.Max(0, value);
-                Trim();
+                trimmed = Trim();
+            }
+
+            if (trimmed)
+            {
+                OnChanged();
             }
         }
     }
@@ -173,6 +180,9 @@ public sealed class Activity
 
     internal object Gate => _gate;
 
+    // Under the lock: numbers endings in the order they happen, which clock times can't tell apart.
+    internal long NextEnding() => ++_endings;
+
     internal void Finished()
     {
         lock (_gate)
@@ -188,8 +198,8 @@ public sealed class Activity
         Changed?.Invoke();
     }
 
-    // Under the lock: drops the oldest finished tasks beyond KeepFinished.
-    private void Trim()
+    // Under the lock: drops the tasks that finished longest ago beyond KeepFinished. Returns whether any went.
+    private bool Trim()
     {
         int finished = 0;
         foreach (var task in _tasks)
@@ -200,18 +210,24 @@ public sealed class Activity
             }
         }
 
-        for (int i = 0; i < _tasks.Count && finished > _keepFinished;)
+        bool trimmed = false;
+        for (; finished > _keepFinished; finished--)
         {
-            if (_tasks[i].StateUnlocked != ActivityState.Running)
+            int oldest = -1;
+            for (int i = 0; i < _tasks.Count; i++)
             {
-                _tasks.RemoveAt(i);
-                finished--;
+                if (_tasks[i].StateUnlocked != ActivityState.Running
+                    && (oldest < 0 || _tasks[i].Ending < _tasks[oldest].Ending))
+                {
+                    oldest = i;
+                }
             }
-            else
-            {
-                i++;
-            }
+
+            _tasks.RemoveAt(oldest);
+            trimmed = true;
         }
+
+        return trimmed;
     }
 }
 
@@ -280,6 +296,9 @@ public sealed class ActivityTask : IDisposable
 
     internal ActivityState StateUnlocked => _state;
 
+    // When the task ended relative to the others in its Activity (see Activity.NextEnding); 0 while running.
+    internal long Ending { get; private set; }
+
     /// <summary>Sets <see cref="Progress"/> and, if given, <see cref="Message"/> in one change.</summary>
     public void Report(double? progress, string? message = null)
     {
@@ -321,6 +340,7 @@ public sealed class ActivityTask : IDisposable
 
             _state = state;
             _ended = _owner.Clock.GetUtcNow();
+            Ending = _owner.NextEnding();
             if (message is not null)
             {
                 _message = message;

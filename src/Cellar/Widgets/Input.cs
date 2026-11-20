@@ -98,6 +98,9 @@ public sealed class Input : Widget
         set => _cursor = Math.Clamp(value, 0, _runes.Count);
     }
 
+    // The length of Text in Unicode scalars, the unit of CursorPosition.
+    internal int RuneCount => _runes.Count;
+
     public override Size Measure(Size available) => new(available.Width, 1);
 
     public override void Render(Surface surface, Rect area)
@@ -302,13 +305,22 @@ public sealed class Input : Widget
             return;
         }
 
-        var sb = new StringBuilder(to - from);
-        for (int i = from; i < to; i++)
+        if (Mask is not null)
         {
-            sb.Append(_runes[i].ToString());
+            // A secret must not survive in the yank buffer, where another field could paste it in the clear.
+            _killed = string.Empty;
+        }
+        else
+        {
+            var sb = new StringBuilder(to - from);
+            for (int i = from; i < to; i++)
+            {
+                sb.Append(_runes[i].ToString());
+            }
+
+            _killed = sb.ToString();
         }
 
-        _killed = sb.ToString();
         _runes.RemoveRange(from, to - from);
         _cursor = from;
         Changed();

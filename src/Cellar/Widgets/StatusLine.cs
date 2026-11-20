@@ -67,6 +67,9 @@ public class StatusItem
     /// <summary>The text to draw, long or short form. Called on every render, so keep it allocation-free.</summary>
     public virtual StyledText GetText(bool shortForm) => shortForm && ShortText is { } s ? s : Text;
 
+    // Whether the item changes on its own, so the line asks for another frame while it's drawn.
+    internal virtual bool Animates => false;
+
     /// <summary>A mode badge: the text in bold on an accent background, e.g. " INSERT ".</summary>
     public static StatusItem Badge(string text, Color? background = null, StatusAlignment alignment = StatusAlignment.Left, int priority = 1000)
     {
@@ -105,6 +108,8 @@ public sealed class SpinnerStatusItem : StatusItem
 
     public override bool IsShown => Visible && Active;
 
+    internal override bool Animates => true;
+
     public override StyledText GetText(bool shortForm)
     {
         var frames = Frames.Frames;
@@ -137,7 +142,6 @@ public sealed class SpinnerStatusItem : StatusItem
             _lastStepTicks = now;
         }
 
-        Repaint.Request();
         int index = _frame % frames.Length;
         return shortForm ? _shortFrames![index] : _frames[index];
     }
@@ -160,8 +164,11 @@ public sealed class StatusLine : Widget
     private readonly List<StatusItem> _items = new();
     private readonly List<StatusItem> _hintItems = new();
     private readonly List<AppAction> _footer = new();
+    private readonly List<KeySequence> _footerKeys = new();
     private readonly List<AppAction> _builtFooter = new();
+    private readonly List<KeySequence> _builtKeys = new();
     private int _builtVersion = -1;
+    private Theme? _builtTheme;
     private Keymap? _keymap;
 
     // Per-render layout buffers, reused so a steady frame allocates nothing.
@@ -212,6 +219,7 @@ public sealed class StatusLine : Widget
         {
             _keymap = value;
             _builtFooter.Clear();
+            _builtKeys.Clear();
             _hintItems.Clear();
             _builtVersion = -1;
         }
@@ -328,6 +336,11 @@ public sealed class StatusLine : Widget
             var item = _shown[i];
             var text = item.GetText(_state[i] == 1);
             int w = Width(i);
+            if (item.Animates)
+            {
+                Repaint.Request(); // only for an item that survived layout: a dropped spinner doesn't keep frames coming
+            }
+
             if (item.Alignment == StatusAlignment.Left)
             {
                 Draw(surface, leftX, area.Y, area.Right, text, item, lineStyle, theme);
@@ -426,26 +439,29 @@ public sealed class StatusLine : Widget
             return;
         }
 
-        _keymap.CollectFooterActions(_footer);
-        if (_builtVersion == _keymap.Version && SameActions(_footer, _builtFooter))
+        // The hints bake in the keys that run each action now (which depend on the active scopes) and the theme's
+        // colors, so either changing rebuilds them.
+        _keymap.CollectFooter(_footer, _footerKeys);
+        var theme = Theme.Current;
+        if (_builtVersion == _keymap.Version && ReferenceEquals(_builtTheme, theme)
+            && Same(_footer, _builtFooter) && Same(_footerKeys, _builtKeys))
         {
             return;
         }
 
         _builtVersion = _keymap.Version;
+        _builtTheme = theme;
         _builtFooter.Clear();
         _builtFooter.AddRange(_footer);
+        _builtKeys.Clear();
+        _builtKeys.AddRange(_footerKeys);
         _hintItems.Clear();
-        var theme = Theme.Current;
         var keyStyle = new Style(theme.Accent, Color.Default).Bold;
         var labelStyle = new Style(theme.Muted, Color.Default);
-        foreach (var action in _footer)
+        for (int i = 0; i < _footer.Count; i++)
         {
-            if (_keymap.PrimaryKey(action) is not { } key)
-            {
-                continue;
-            }
-
+            var action = _footer[i];
+            var key = _footerKeys[i];
             string keyText = key.ToShortString();
             var captured = action;
             _hintItems.Add(new StatusItem(
@@ -459,7 +475,8 @@ public sealed class StatusLine : Widget
         }
     }
 
-    private static bool SameActions(List<AppAction> a, List<AppAction> b)
+    private static bool Same<T>(List<T> a, List<T> b)
+        where T : class
     {
         if (a.Count != b.Count)
         {
@@ -535,7 +552,7 @@ public sealed class StatusLine : Widget
             _shown.Add(item);
             int full = item.GetText(false).Width;
             _widths.Add(full);
-            _shortWidths.Add(item.ShortText is null ? full : Math.Min(full, item.GetText(true).Width));
+            _shortWidths.Add(Math.Min(full, item.GetText(true).Width));
             _state.Add(0);
         }
     }

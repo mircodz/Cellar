@@ -222,4 +222,86 @@ public class ActivityTests
         Assert.EndsWith(" 3m05s", rows[2]);
         Assert.EndsWith(" 1h02m", rows[3]);
     }
+
+    [Fact]
+    public void LoweringKeepFinished_PublishesTheTrim()
+    {
+        var activity = new Activity();
+        activity.Start("Old").Succeed();
+        activity.Start("New").Succeed();
+        var strip = new ActivityStrip(activity);
+        Assert.Contains("Old", Row(strip, 40));
+
+        int version = activity.Version;
+        int changes = 0;
+        activity.Changed += () => changes++;
+        activity.KeepFinished = 1;
+        Assert.True(activity.Version > version);
+        Assert.Equal(1, changes);
+        Assert.DoesNotContain("Old", Row(strip, 40));
+        Assert.Contains("New", Row(strip, 40));
+    }
+
+    [Fact]
+    public void KeepFinished_DropsWhatFinishedLongestAgo_NotWhatStartedFirst()
+    {
+        var activity = new Activity { KeepFinished = 1 };
+        var a = activity.Start("A");
+        var b = activity.Start("B");
+        b.Succeed();
+        a.Fail("broke");
+        var kept = Assert.Single(activity.Snapshot());
+        Assert.Equal("A", kept.Title);
+        Assert.Equal(ActivityState.Failed, kept.State);
+    }
+
+    [Fact]
+    public void Strip_ShowsTheLatestOutcomeFirst_WhateverTheStartOrder()
+    {
+        var activity = new Activity();
+        var alpha = activity.Start("Alpha");
+        var beta = activity.Start("Beta");
+        beta.Succeed();
+        alpha.Succeed();
+        var row = Row(new ActivityStrip(activity), 40);
+        Assert.True(row.IndexOf("Alpha", StringComparison.Ordinal) < row.IndexOf("Beta", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Strip_ReservesRoomForTheCountOnlyWhenSomethingIsLeft()
+    {
+        var activity = new Activity();
+        activity.Start("A").Succeed();
+        activity.Start("B").Succeed();
+        Assert.Equal("✓ B · ✓ A", Row(new ActivityStrip(activity), 9));
+    }
+
+    [Fact]
+    public void List_KeepsElapsedTimesClearOfTheScrollbar()
+    {
+        var clock = new ManualClock();
+        var activity = new Activity(clock);
+        for (int i = 0; i < 4; i++)
+        {
+            var task = activity.Start("job");
+            clock.Advance(TimeSpan.FromMilliseconds(850));
+            task.Succeed();
+        }
+
+        var surface = SurfaceText.Render(new ActivityList(activity), 30, 2);
+        Assert.EndsWith("850ms", SurfaceText.Row(surface, 0)[..29].TrimEnd());
+        Assert.EndsWith("850ms", SurfaceText.Row(surface, 1)[..29].TrimEnd());
+    }
+
+    [Fact]
+    public void List_SelectedRowUsesTheSelectionColors()
+    {
+        var activity = new Activity();
+        activity.Start("Running");
+        var surface = SurfaceText.Render(new ActivityList(activity) { HasFocus = true }, 30, 2);
+        var theme = Theme.Current;
+        Assert.Equal(theme.SelectionForeground, surface.Get(0, 0).Style.Foreground); // the spinner glyph
+        Assert.Equal(theme.SelectionForeground, surface.Get(2, 0).Style.Foreground); // the title
+        Assert.Equal(theme.SelectionBackground, surface.Get(2, 0).Style.Background);
+    }
 }

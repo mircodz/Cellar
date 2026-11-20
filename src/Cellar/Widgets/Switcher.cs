@@ -88,7 +88,7 @@ public sealed class Switcher : Widget
             {
                 Swap(widget);
             }
-            else if (_mounted.Remove(old))
+            else if (!ReferenceEquals(old, widget) && _mounted.Remove(old))
             {
                 old.Unmount();
             }

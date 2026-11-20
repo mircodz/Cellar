@@ -93,6 +93,7 @@ public sealed class ActivityStrip : Widget
         if (_version != Activity.Version)
         {
             _version = Activity.CopyTo(_tasks);
+            _tasks.Sort(EndOrder);
         }
 
         var theme = Theme.Current;
@@ -102,6 +103,15 @@ public sealed class ActivityStrip : Widget
         int hidden = 0;
         bool running = false;
         var nextExpiry = DateTimeOffset.MaxValue;
+
+        int eligible = 0;
+        foreach (var task in _tasks)
+        {
+            if (task.IsRunning || ShownUntil(task) > now)
+            {
+                eligible++;
+            }
+        }
 
         // Running tasks first, oldest first; then finished ones, newest first.
         for (int i = 0; i < _tasks.Count; i++)
@@ -113,7 +123,7 @@ public sealed class ActivityStrip : Widget
             }
 
             running = true;
-            if (hidden > 0 || !Draw(surface, area, ref x, task, theme, shown))
+            if (hidden > 0 || !Draw(surface, area, ref x, task, theme, shown, shown + 1 < eligible))
             {
                 hidden++;
             }
@@ -126,12 +136,12 @@ public sealed class ActivityStrip : Widget
         for (int i = _tasks.Count - 1; i >= 0; i--)
         {
             var task = _tasks[i];
-            if (task.IsRunning || task.Ended is not { } ended)
+            if (task.IsRunning)
             {
                 continue;
             }
 
-            var until = ended + (task.State == ActivityState.Failed ? ShowFailedFor : ShowFinishedFor);
+            var until = ShownUntil(task);
             if (until <= now)
             {
                 continue;
@@ -142,7 +152,7 @@ public sealed class ActivityStrip : Widget
                 nextExpiry = until;
             }
 
-            if (hidden > 0 || !Draw(surface, area, ref x, task, theme, shown))
+            if (hidden > 0 || !Draw(surface, area, ref x, task, theme, shown, shown + 1 < eligible))
             {
                 hidden++;
             }
@@ -169,8 +179,18 @@ public sealed class ActivityStrip : Widget
         ScheduleExpiry(nextExpiry, now);
     }
 
-    // Draws one task at x if it fits along with room for a "+N" after it; returns false (drawing nothing) if not.
-    private static bool Draw(Surface surface, Rect area, ref int x, in ActivitySnapshot task, Theme theme, int shown)
+    // Running tasks first in start order, then finished ones in the order they ended (CopyTo gives start order).
+    private static readonly Comparison<ActivitySnapshot> EndOrder = static (a, b) =>
+        a.IsRunning != b.IsRunning ? (a.IsRunning ? -1 : 1)
+        : Nullable.Compare(a.Ended, b.Ended) is var c and not 0 ? c : a.Id.CompareTo(b.Id);
+
+    private DateTimeOffset ShownUntil(in ActivitySnapshot task) => task.Ended is { } ended
+        ? ended + (task.State == ActivityState.Failed ? ShowFailedFor : ShowFinishedFor)
+        : DateTimeOffset.MaxValue;
+
+    // Draws one task at x if it fits, along with room for a "+N" after it when more tasks follow; returns false
+    // (drawing nothing) if not.
+    private static bool Draw(Surface surface, Rect area, ref int x, in ActivitySnapshot task, Theme theme, int shown, bool more)
     {
         Span<char> percent = stackalloc char[5];
         int percentLength = 0;
@@ -185,7 +205,7 @@ public sealed class ActivityStrip : Widget
         int width = gap + 2 + Unicode.StringWidth(task.Title) + (percentLength > 0 ? percentLength + 1 : 0)
             + (detail is null ? 0 : 2 + Unicode.StringWidth(detail));
         const int moreRoom = 4; // "  +9"
-        if (x + width > area.Right - (shown > 0 ? moreRoom : 0) && shown > 0)
+        if (x + width > area.Right - (more ? moreRoom : 0) && shown > 0)
         {
             return false;
         }
@@ -359,6 +379,8 @@ public sealed class ActivityList : Widget
         Move(0);
         var now = Activity.Clock.GetUtcNow();
         bool running = false;
+        bool overflow = _order.Count > area.Height;
+        int contentRight = overflow ? area.Right - 1 : area.Right; // keep the scrollbar's column clear
         Span<char> right = stackalloc char[24];
         var clip = surface.Clip;
         for (int row = 0; row < area.Height && _top + row < _order.Count; row++)
@@ -370,11 +392,11 @@ public sealed class ActivityList : Widget
             bool selected = index == _selected && HasFocus;
             if (selected)
             {
-                surface.FillRect(new Rect(area.X, y, area.Width, 1), theme.SelectionStyle);
+                surface.FillRect(new Rect(area.X, y, contentRight - area.X, 1), theme.SelectionStyle);
             }
 
             int length = FormatRight(right, task, now);
-            int rightX = Math.Max(area.X, area.Right - length);
+            int rightX = Math.Max(area.X, contentRight - length);
             surface.SetClip(new Rect(area.X, y, Math.Max(0, rightX - 1 - area.X), 1).Intersect(clip));
             int x = surface.DrawText(area.X, y, ActivityStrip.Glyph(task.State), Selected(ActivityStrip.GlyphStyle(task.State, theme), selected, theme));
             x = surface.DrawText(x + 1, y, task.Title, Selected(theme.TextStyle, selected, theme));
@@ -385,10 +407,12 @@ public sealed class ActivityList : Widget
             }
 
             surface.SetClip(clip);
+            surface.SetClip(new Rect(area.X, y, contentRight - area.X, 1).Intersect(clip));
             surface.DrawText(rightX, y, right[..length], Selected(theme.MutedStyle, selected, theme));
+            surface.SetClip(clip);
         }
 
-        if (_order.Count > area.Height)
+        if (overflow)
         {
             Scrollbar.Default.Render(surface, new Rect(area.Right - 1, area.Y, 1, area.Height), _top, area.Height, _order.Count);
         }
@@ -400,7 +424,7 @@ public sealed class ActivityList : Widget
     }
 
     private static Style Selected(Style style, bool selected, Theme theme) =>
-        selected ? style.WithBackground(theme.SelectionBackground) : style;
+        selected ? style with { Foreground = theme.SelectionForeground, Background = theme.SelectionBackground } : style;
 
     // "42%  1m05s" for a running task with progress, "1m05s" otherwise.
     private static int FormatRight(Span<char> buffer, in ActivitySnapshot task, DateTimeOffset now)

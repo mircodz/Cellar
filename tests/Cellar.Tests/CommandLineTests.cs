@@ -232,4 +232,58 @@ public class CommandLineTests
 
         return texts;
     }
+
+    [Fact]
+    public void EmptyField_ShowsTheModePlaceholder()
+    {
+        var line = new CommandLine();
+        line.Open(new CommandMode("/") { Placeholder = "search" });
+        Assert.Equal("/search", SurfaceText.Row(SurfaceText.Render(line, 20), 0).TrimEnd());
+        Type(line, "x");
+        Assert.Equal("/x", SurfaceText.Row(SurfaceText.Render(line, 20), 0).TrimEnd());
+    }
+
+    [Fact]
+    public void Popup_ShrinksToTheRoomAboveTheLine()
+    {
+        var (keymap, _) = Commands();
+        var line = new CommandLine();
+        line.Open(line.CommandsFor(keymap));
+        Type(line, "c");
+        var surface = new Surface(40, 4);
+        line.Render(surface, new Rect(0, 3, 40, 1));
+        Assert.StartsWith("╭", SurfaceText.Row(surface, 0).TrimStart());
+        Assert.Contains("cd", SurfaceText.Row(surface, 1), StringComparison.Ordinal);
+        Assert.StartsWith("╰", SurfaceText.Row(surface, 2).TrimStart());
+        Assert.Equal(":cd", SurfaceText.Row(surface, 3).TrimEnd());
+    }
+
+    [Fact]
+    public void Popup_DrawsOutsideTheLinesOwnClip()
+    {
+        var (keymap, _) = Commands();
+        var line = new CommandLine();
+        line.Open(line.CommandsFor(keymap));
+        Type(line, "c");
+        var surface = new Surface(40, 6);
+        surface.SetClip(new Rect(0, 5, 40, 1));
+        line.Render(surface, new Rect(0, 5, 40, 1));
+        Assert.Contains("Change directory", SurfaceText.Row(surface, 1), StringComparison.Ordinal);
+        Assert.Equal(new Rect(0, 5, 40, 1), surface.Clip);
+    }
+
+    [Fact]
+    public void RightArrow_AcceptsTheCandidateAsWritten()
+    {
+        var line = new CommandLine { ShowCompletionPopup = false };
+        line.Open(new CommandMode(":") { Completion = CompletionSource.Words(["Beta", "😀bc"]) });
+        Type(line, "b");
+        line.Intercept(K(Key.Right));
+        Assert.Equal("Beta", line.Input.Text);
+
+        line.Input.Text = string.Empty;
+        line.Intercept(new KeyEvent(Key.Char, new Rune(0x1F600), KeyModifiers.None));
+        line.Intercept(K(Key.Right));
+        Assert.Equal("😀bc", line.Input.Text);
+    }
 }

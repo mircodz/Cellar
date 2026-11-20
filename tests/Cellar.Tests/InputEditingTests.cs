@@ -222,4 +222,15 @@ public class InputEditingTests
         input.Render(surface, surface.Bounds);
         Assert.NotEqual("s", surface.Get(3, 0).Grapheme);
     }
+
+    [Fact]
+    public void MaskedField_KillsWithoutKeepingTheSecret()
+    {
+        var input = Field("hunter2");
+        input.Mask = '*';
+        input.OnEvent(Ctrl('u'));
+        Assert.Equal(string.Empty, input.Text);
+        input.OnEvent(Ctrl('y'));
+        Assert.Equal(string.Empty, input.Text);
+    }
 }

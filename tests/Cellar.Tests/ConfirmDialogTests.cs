@@ -107,4 +107,63 @@ public class ConfirmDialogTests
         Assert.True(result!.Confirmed);
         Assert.Null(app.TopOverlay);
     }
+
+    [Fact]
+    public void ChangingTheHeadline_RedrawsIt()
+    {
+        var dialog = new ConfirmDialog("Delete a.txt?");
+        Assert.Contains("Delete a.txt?", Rows(dialog, 40, 6)[1]);
+        dialog.Headline = "Delete b.txt?";
+        Assert.Contains("Delete b.txt?", Rows(dialog, 40, 6)[1]);
+    }
+
+    [Fact]
+    public void ConfirmText_IsComparedWithoutItsOwnSurroundingSpaces()
+    {
+        var results = new List<ConfirmResult>();
+        var dialog = new ConfirmDialog("Delete?")
+        {
+            Risk = ConfirmRisk.Destructive,
+            ConfirmText = " web-01 ",
+            OnResult = results.Add,
+            HasFocus = true,
+        };
+
+        foreach (var c in "web-01")
+        {
+            dialog.OnEvent(C(c));
+        }
+
+        Assert.True(dialog.Confirm());
+        Assert.True(results[0].Confirmed);
+    }
+
+    [Fact]
+    public void LongDetails_ScrollSoNothingIsConfirmedUnseen()
+    {
+        var details = new List<StyledText>();
+        for (int i = 1; i <= 12; i++)
+        {
+            details.Add(new StyledText($"detail {i}"));
+        }
+
+        var dialog = new ConfirmDialog("Apply?") { Details = details, HasFocus = true };
+        var rows = string.Join("\n", Rows(dialog, 40, 8));
+        Assert.Contains("Apply?", rows);
+        Assert.DoesNotContain("detail 12", rows);
+
+        Assert.True(dialog.OnEvent(K(Key.PageDown)));
+        Assert.True(dialog.OnEvent(K(Key.PageDown)));
+        Assert.True(dialog.OnEvent(K(Key.PageDown)));
+        rows = string.Join("\n", Rows(dialog, 40, 8));
+        Assert.Contains("detail 12", rows);
+        Assert.DoesNotContain("Apply?", rows);
+
+        dialog.OnEvent(new MouseEvent(MouseEventKind.Wheel, MouseButton.WheelUp, 1, 1, KeyModifiers.None));
+        dialog.OnEvent(new MouseEvent(MouseEventKind.Wheel, MouseButton.WheelUp, 1, 1, KeyModifiers.None));
+        dialog.OnEvent(new MouseEvent(MouseEventKind.Wheel, MouseButton.WheelUp, 1, 1, KeyModifiers.None));
+        dialog.OnEvent(new MouseEvent(MouseEventKind.Wheel, MouseButton.WheelUp, 1, 1, KeyModifiers.None));
+        dialog.OnEvent(new MouseEvent(MouseEventKind.Wheel, MouseButton.WheelUp, 1, 1, KeyModifiers.None));
+        Assert.Contains("Apply?", string.Join("\n", Rows(dialog, 40, 8)));
+    }
 }

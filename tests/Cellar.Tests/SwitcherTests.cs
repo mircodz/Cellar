@@ -126,4 +126,18 @@ public class SwitcherTests
         Assert.True(a.IsMounted);
         Assert.Equal(1, a.Mounts);
     }
+
+    [Fact]
+    public void ReAddingTheShownWidget_KeepsItMounted()
+    {
+        using var app = new App(new FakeTerminal());
+        var a = new MountProbe();
+        var switcher = new Switcher();
+        switcher.Add("a", a);
+        switcher.Current = a;
+        switcher.Mount(app);
+        switcher.Add("a", a);
+        Assert.True(a.IsMounted);
+        Assert.Equal(1, a.Mounts);
+    }
 }

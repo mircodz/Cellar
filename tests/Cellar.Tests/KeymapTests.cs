@@ -132,6 +132,21 @@ public class KeymapTests
     }
 
     [Fact]
+    public void KeysFor_LeavesOutKeysAnotherActionWins()
+    {
+        var describe = new AppAction("describe", "Describe", () => { }) { Keys = ["d", "i"], Footer = "describe" };
+        var keymap = new Keymap().Add(describe);
+        bool pageActive = true;
+        var page = keymap.AddScope("page", KeymapScope.PagePrecedence, () => pageActive);
+        page.Add(new AppAction("delete", "Delete", () => { }) { Keys = ["d"], Footer = "delete" });
+
+        Assert.Equal(["i"], keymap.KeysFor(describe).Select(k => k.ToString()));
+        Assert.Equal("i", keymap.PrimaryKey(describe)?.ToString());
+        pageActive = false;
+        Assert.Equal(["d", "i"], keymap.KeysFor(describe).Select(k => k.ToString()));
+    }
+
+    [Fact]
     public void ProviderScope_ReadsItsActionsEachTime()
     {
         var actions = new List<AppAction>();

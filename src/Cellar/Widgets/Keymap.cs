@@ -293,7 +293,8 @@ public sealed class Keymap
     }
 
     /// <summary>The keys that run <paramref name="action"/> now: those the user mapped to it, then its own keys
-    /// that the user didn't take for something else.</summary>
+    /// that neither the user nor an action that wins them (one in a higher active scope, say) took for something
+    /// else.</summary>
     public IReadOnlyList<KeySequence> KeysFor(AppAction action)
     {
         var keys = new List<KeySequence>();
@@ -305,15 +306,47 @@ public sealed class Keymap
             }
         }
 
-        foreach (var sequence in action.Keys)
+        _available.Clear();
+        CollectAvailable(_available);
+        var own = action.Keys;
+        for (int i = 0; i < own.Count; i++)
         {
-            if (!_overrides.ContainsKey(sequence) && !keys.Contains(sequence))
+            if (!keys.Contains(own[i]) && Reaches(own[i], action, _available))
             {
-                keys.Add(sequence);
+                keys.Add(own[i]);
             }
         }
 
         return keys;
+    }
+
+    // Whether pressing one of action's own keys runs it, as Resolve decides: the user didn't remap the key, and no
+    // action ahead of it among the available ones has the key too.
+    private bool Reaches(KeySequence sequence, AppAction action, List<AppAction> available)
+    {
+        if (_overrides.ContainsKey(sequence))
+        {
+            return false;
+        }
+
+        foreach (var other in available)
+        {
+            if (ReferenceEquals(other, action))
+            {
+                return true;
+            }
+
+            var keys = other.Keys;
+            for (int i = 0; i < keys.Count; i++)
+            {
+                if (keys[i].Equals(sequence))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     /// <summary>The available action a single key runs, ignoring sequences and any pending keys; null if none.</summary>
@@ -506,14 +539,18 @@ public sealed class Keymap
 
     /// <summary>Like <see cref="FooterActions"/>, into a list the caller reuses, so a footer that asks every frame
     /// doesn't allocate (beyond what scope providers and <see cref="AppAction.When"/> do).</summary>
-    public void CollectFooterActions(List<AppAction> into)
+    public void CollectFooterActions(List<AppAction> into) => CollectFooter(into, null);
+
+    // CollectFooterActions, plus each action's PrimaryKey into keys, from one pass over the scopes.
+    internal void CollectFooter(List<AppAction> into, List<KeySequence>? keys)
     {
         into.Clear();
+        keys?.Clear();
         _available.Clear();
         CollectAvailable(_available);
         foreach (var action in _available)
         {
-            if (action.Footer is null || !HasKeys(action))
+            if (action.Footer is null || PrimaryKey(action, _available) is not { } key)
             {
                 continue;
             }
@@ -521,39 +558,35 @@ public sealed class Keymap
             // Insertion sort: stable, and the list is a handful of items.
             int i = into.Count;
             into.Add(action);
+            keys?.Add(key);
             while (i > 0 && into[i - 1].Priority < action.Priority)
             {
                 into[i] = into[i - 1];
+                if (keys is not null)
+                {
+                    keys[i] = keys[i - 1];
+                }
+
                 i--;
             }
 
             into[i] = action;
-        }
-    }
-
-    private bool HasKeys(AppAction action)
-    {
-        foreach (var (_, id) in _overrides)
-        {
-            if (id == action.Id)
+            if (keys is not null)
             {
-                return true;
+                keys[i] = key;
             }
         }
-
-        foreach (var sequence in action.Keys)
-        {
-            if (!_overrides.ContainsKey(sequence))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>The key the footer shows for <paramref name="action"/>: the first of <see cref="KeysFor"/>, or null.</summary>
     public KeySequence? PrimaryKey(AppAction action)
+    {
+        _available.Clear();
+        CollectAvailable(_available);
+        return PrimaryKey(action, _available);
+    }
+
+    private KeySequence? PrimaryKey(AppAction action, List<AppAction> available)
     {
         foreach (var (sequence, id) in _overrides)
         {
@@ -563,11 +596,12 @@ public sealed class Keymap
             }
         }
 
-        foreach (var sequence in action.Keys)
+        var keys = action.Keys;
+        for (int i = 0; i < keys.Count; i++)
         {
-            if (!_overrides.ContainsKey(sequence))
+            if (Reaches(keys[i], action, available))
             {
-                return sequence;
+                return keys[i];
             }
         }
 

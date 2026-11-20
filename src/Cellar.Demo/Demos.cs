@@ -18,6 +18,8 @@ internal readonly record struct TraceFrame(string Name, double Ms, double Percen
 /// <summary>One row of the table views demo.</summary>
 internal sealed record DemoTask(string Name, string State, int Attempts, TimeSpan Age);
 
+internal sealed record DemoMessage(string From, string Subject, string Received);
+
 /// <summary>One row of the table demo: where something allocates, and how much.</summary>
 internal sealed record AllocationSite(string Type, string Method, string Allocator, double MiB, int Count, double OwnPercent)
 {
@@ -51,6 +53,7 @@ internal static class Demos
         new("Form", "settings to review and change, as a page or a dialog", FormDemo),
         new("Confirm dialog", "y/n, or type the name; toggles like force", ConfirmDemo),
         new("Text viewer", "pager: / search, n/N, wrap, JSON and XML colors", TextViewerDemo),
+        new("Switcher", "one place, several views; focus and lifecycle follow", SwitcherDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -982,6 +985,70 @@ internal static class Demos
         }
 
         return text;
+    }
+
+    // A Switcher holding three named views of a small mail app. 1/2/3 (or :inbox, :notes, :about in a real app)
+    // swap them; the one shown gets the focus, so j/k scroll the inbox or the notes without any routing code.
+    private static Widget SwitcherDemo(DemoContext ctx)
+    {
+        var inbox = new Table<DemoMessage> { ShowHeader = true, Striped = true };
+        inbox.Columns.Add(new TableColumn<DemoMessage>("From", Constraint.Length(14), m => m.From));
+        inbox.Columns.Add(new TableColumn<DemoMessage>("Subject", Constraint.Fill(), m => m.Subject));
+        inbox.Columns.Add(new TableColumn<DemoMessage>("Received", Constraint.Length(10), m => m.Received, Justify.Right));
+        inbox.SetRows([
+            new("Ada", "Lunch on Friday?", "09:12"),
+            new("Grace", "Slides for the talk", "08:47"),
+            new("Linus", "Re: patch v3", "yesterday"),
+            new("Margaret", "Photos from the trip", "Mon"),
+            new("Alan", "Chess this weekend", "Sun"),
+        ]);
+
+        var notes = new TextViewer(string.Join('\n',
+            "Groceries", "  - oranges", "  - coffee beans", "  - bread", "",
+            "Ideas", "  - a tiny pager widget", "  - a calendar view", "  - sort the photo archive by year"));
+        var about = new Label(new StyledText(
+            "Each view is an ordinary widget. The switcher forwards render, input and focus to the one showing and " +
+            "mounts it while it shows, so a view that refreshes in the background stops when it's swapped out.",
+            Theme.Current.TextStyle)) { Wrap = true };
+
+        var bar = new Label(StyledText.Empty());
+        var log = new Label(StyledText.Empty());
+        var switcher = new Switcher()
+            .Add("inbox", inbox)
+            .Add("notes", notes)
+            .Add("about", Padded(about));
+
+        void Update()
+        {
+            var text = new StyledText();
+            int i = 1;
+            foreach (var name in switcher.Names)
+            {
+                bool current = name == switcher.CurrentName;
+                text.Append($" {i++} {name} ", current ? new Style(Theme.Current.SelectionForeground, Theme.Current.Accent).Bold : Theme.Current.MutedStyle);
+            }
+
+            bar.Content = text;
+        }
+
+        switcher.OnSwitch = (from, to) =>
+        {
+            log.Content = new StyledText("switched to ", Theme.Current.MutedStyle).Append(switcher.CurrentName ?? "nothing", Theme.Current.AccentStyle);
+            Update();
+        };
+        Update();
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("inbox", "Show the inbox", () => switcher.Show("inbox")) { Keys = ["1"] });
+        keymap.Add(new AppAction("notes", "Show the notes", () => switcher.Show("notes")) { Keys = ["2"] });
+        keymap.Add(new AppAction("about", "Show about", () => switcher.Show("about")) { Keys = ["3"] });
+
+        var body = new Stack(Direction.Vertical)
+            .Add(new Label(KeyHints(("1/2/3", "switch view"), ("↑/↓", "move in the view"))), Constraint.Length(2))
+            .Add(bar, Constraint.Length(1))
+            .Add(new Panel(new KeyHost(switcher, keymap)), Constraint.Fill())
+            .Add(log, Constraint.Length(1));
+        return Padded(body);
     }
 
     private static Widget ConfirmDemo(DemoContext ctx)

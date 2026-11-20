@@ -23,9 +23,9 @@ public class FormTests
 
     private static Form Settings() => new([
         new FormField("name", "Name", "web") { ReadOnly = true, Section = "General" },
-        new FormField("replicas", "Replicas", "3") { Kind = FormFieldKind.Number, Min = 1, Max = 10, Integer = true, Hint = "how many copies run", Section = "General" },
-        new FormField("timeout", "Timeout", "30s") { Kind = FormFieldKind.Duration, Note = "default 30s", Section = "Rollout" },
-        FormField.Choice("strategy", "Strategy", "rolling", ["rolling", "recreate", "blue-green"]),
+        new FormField("attempts", "Attempts", "3") { Kind = FormFieldKind.Number, Min = 1, Max = 10, Integer = true, Hint = "how many tries", Section = "General" },
+        new FormField("timeout", "Timeout", "30s") { Kind = FormFieldKind.Duration, Note = "default 30s", Section = "Timing" },
+        FormField.Choice("conflict", "Conflict", "ask", ["ask", "keep", "newest"]),
         FormField.Flag("paused", "Paused", false),
         new FormField("token", "Token", "hunter2") { Kind = FormFieldKind.Secret },
     ])
@@ -50,14 +50,14 @@ public class FormTests
         var rows = Rows(form);
         Assert.Equal("General", rows[0]);
         Assert.Equal("  Name      web", rows[1]);
-        Assert.Equal("  Replicas  3", rows[2]);
-        Assert.Equal("Rollout", rows[3]);
+        Assert.Equal("  Attempts  3", rows[2]);
+        Assert.Equal("Timing", rows[3]);
         Assert.Equal("  Timeout   30s  (default 30s)", rows[4]);
-        Assert.Equal("  Strategy  rolling", rows[5]);
+        Assert.Equal("  Conflict  ask", rows[5]);
         Assert.Equal("  Paused    [ ] off", rows[6]);
         Assert.Equal("  Token     •••••••", rows[7]);
-        Assert.Equal("how many copies run", rows[8]);
-        Assert.Equal("replicas", form.Selected!.Key); // read-only fields are skipped at first
+        Assert.Equal("how many tries", rows[8]);
+        Assert.Equal("attempts", form.Selected!.Key); // read-only fields are skipped at first
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class FormTests
         Assert.False(form.IsEditing);
         Assert.Equal("5", form.Selected!.Value);
         Assert.True(form.Selected.IsChanged);
-        Assert.Equal("* Replicas  5  was 3", Rows(form)[2]);
+        Assert.Equal("* Attempts  5  was 3", Rows(form)[2]);
     }
 
     [Fact]
@@ -86,15 +86,15 @@ public class FormTests
         Type(form, "12");
         form.OnEvent(K(Key.Enter));
         Assert.True(form.IsEditing);
-        Assert.Equal("Replicas: expected 1 to 10", form.Message);
-        Assert.Equal("Replicas: expected 1 to 10", Rows(form)[8]);
+        Assert.Equal("Attempts: expected 1 to 10", form.Message);
+        Assert.Equal("Attempts: expected 1 to 10", Rows(form)[8]);
 
         // The message follows the edit once it's shown.
         form.OnEvent(K(Key.Backspace));
         Assert.Null(form.Message);
         Type(form, ".5");
         form.OnEvent(K(Key.Enter));
-        Assert.Equal("Replicas: expected a whole number", form.Message);
+        Assert.Equal("Attempts: expected a whole number", form.Message);
 
         form.OnEvent(K(Key.Escape));
         Assert.False(form.IsEditing);
@@ -115,15 +115,15 @@ public class FormTests
     {
         var form = Settings();
         form.OnEvent(K(Key.Down)); // timeout
-        form.OnEvent(K(Key.Down)); // strategy
+        form.OnEvent(K(Key.Down)); // conflict
         form.OnEvent(K(Key.Right));
-        Assert.Equal("recreate", form.Selected!.Value);
+        Assert.Equal("keep", form.Selected!.Value);
         form.OnEvent(K(Key.Enter));
-        Assert.Equal("blue-green", form.Selected.Value);
+        Assert.Equal("newest", form.Selected.Value);
         form.OnEvent(K(Key.Right));
-        Assert.Equal("rolling", form.Selected.Value);
+        Assert.Equal("ask", form.Selected.Value);
         form.OnEvent(K(Key.Left));
-        Assert.Equal("blue-green", form.Selected.Value);
+        Assert.Equal("newest", form.Selected.Value);
 
         form.OnEvent(K(Key.Down)); // paused
         form.OnEvent(C(' '));
@@ -158,9 +158,9 @@ public class FormTests
 
         form.OnEvent(K(Key.Down));
         form.OnEvent(K(Key.Down));
-        form.OnEvent(K(Key.Right)); // strategy → recreate
+        form.OnEvent(K(Key.Right)); // conflict → keep
         form.OnEvent(C('s', KeyModifiers.Control));
-        Assert.Equal(new Dictionary<string, string> { ["strategy"] = "recreate" }, submitted);
+        Assert.Equal(new Dictionary<string, string> { ["conflict"] = "keep" }, submitted);
     }
 
     [Fact]
@@ -242,7 +242,7 @@ public class FormTests
         Assert.Equal("  Token     •••••••", rows[2]);
         form.SelectedIndex = 2;
         rows = Rows(form, 40, 4);
-        Assert.Equal("Rollout", rows[0]);
+        Assert.Equal("Timing", rows[0]);
     }
 
     [Fact]
@@ -250,12 +250,12 @@ public class FormTests
     {
         using var app = new App(new FakeTerminal { Size = new(60, 20) });
         IReadOnlyDictionary<string, string>? submitted = null;
-        var dialog = FormDialog.Show(app, "scale web", [new FormField("replicas", "Replicas", "3")], changes => submitted = changes);
+        var dialog = FormDialog.Show(app, "sync settings", [new FormField("attempts", "Attempts", "3")], changes => submitted = changes);
         Assert.Same(dialog, app.TopOverlay!.Content);
         Assert.Equal(5, dialog.PreferredHeight); // border, field, footer, hints, border
 
         var surface = SurfaceText.Render(dialog, 60, 5);
-        Assert.Contains("scale web", SurfaceText.Row(surface, 0));
+        Assert.Contains("sync settings", SurfaceText.Row(surface, 0));
         Assert.Contains("enter change  u revert  ctrl+s apply  esc close", SurfaceText.Row(surface, 3));
 
         dialog.OnEvent(K(Key.Enter));
@@ -265,7 +265,7 @@ public class FormTests
         Assert.Contains("1 change", SurfaceText.Row(surface, 3));
 
         dialog.OnEvent(C('s', KeyModifiers.Control));
-        Assert.Equal("34", submitted!["replicas"]);
+        Assert.Equal("34", submitted!["attempts"]);
         Assert.Null(app.TopOverlay);
     }
 }

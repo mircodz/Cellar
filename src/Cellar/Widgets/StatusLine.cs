@@ -144,7 +144,7 @@ public sealed class SpinnerStatusItem : StatusItem
 }
 
 /// <summary>
-/// The bottom line of a k9s-style app: items (counts, mode, key hints) aligned left and right, which give way by
+/// The bottom line of a keyboard-driven app: items (counts, mode, key hints) aligned left and right, which give way by
 /// priority when the terminal is narrow, and transient messages that take the line over for a moment.
 /// Unlike <see cref="StatusBar"/>'s three fixed strings, items are independent, clickable, and drop out
 /// gracefully.

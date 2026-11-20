@@ -78,7 +78,7 @@ public abstract class TableBase<TRow> : Widget
     public int SelectedIndex { get; set; } = -1;
     public int ScrollOffset { get; set; }
 
-    /// <summary>Drawn in the body when there's nothing to show, e.g. "no pods" or "no rows match /web". Spans without
+    /// <summary>Drawn in the body when there's nothing to show, e.g. "no files" or "no rows match /draft". Spans without
     /// a color are drawn muted. Null leaves the body blank.</summary>
     public StyledText? EmptyText { get; set; }
 

@@ -15,7 +15,7 @@ public enum ConfirmRisk
     /// <summary><c>y</c> or enter confirms, <c>n</c> or esc cancels.</summary>
     Normal,
 
-    /// <summary>The user types <see cref="ConfirmDialog.ConfirmText"/> (the target's name, say) and presses
+    /// <summary>The user types <see cref="ConfirmDialog.ConfirmText"/> (the name of what's about to go, say) and presses
     /// enter, so muscle memory can't delete the wrong thing. Drawn in the error color.</summary>
     Destructive,
 }
@@ -56,13 +56,13 @@ public sealed record ConfirmResult(bool Confirmed, IReadOnlyList<ConfirmToggle> 
 /// "type <c>web-01</c> to confirm". <see cref="OnResult"/> gets the answer and the toggles; esc always cancels.
 /// </summary>
 /// <example><code>
-/// ConfirmDialog.Show(app, new ConfirmDialog("Delete node web-01?")
+/// ConfirmDialog.Show(app, new ConfirmDialog("Delete report.pdf?")
 /// {
-///     Details = ["Its 12 replicas move to other nodes first."],
+///     Details = ["It is removed from every synced device."],
 ///     Risk = ConfirmRisk.Destructive,
-///     ConfirmText = "web-01",
-///     Toggles = [new ConfirmToggle('f', "force: don't wait for replicas to move")],
-/// }, result => { if (result.Confirmed) Delete(force: result.IsOn('f')); });
+///     ConfirmText = "report.pdf",
+///     Toggles = [new ConfirmToggle('f', "force: delete even if it's open")],
+/// }, result => { if (result.Confirmed) Delete("report.pdf", force: result.IsOn('f')); });
 /// </code></example>
 public sealed class ConfirmDialog : Widget
 {

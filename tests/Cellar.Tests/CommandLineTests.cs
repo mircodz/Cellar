@@ -27,8 +27,8 @@ public class CommandLineTests
         var ran = new List<string>();
         var keymap = new Keymap();
         keymap.Add(new AppAction("quit", "Quit", () => ran.Add("quit")) { Commands = ["quit", "q"] });
-        keymap.Add(new AppAction("ctx", "Switch context", arg => ran.Add("ctx " + arg)) { Commands = ["ctx", "context"], ArgumentHint = "<name>" });
-        keymap.Add(new AppAction("cordon", "Cordon node", () => ran.Add("cordon")) { Commands = ["cordon"] });
+        keymap.Add(new AppAction("cd", "Change directory", arg => ran.Add("cd " + arg)) { Commands = ["cd", "chdir"], ArgumentHint = "<name>" });
+        keymap.Add(new AppAction("copy", "Copy files", () => ran.Add("copy")) { Commands = ["copy"] });
         return (keymap, ran);
     }
 
@@ -36,9 +36,9 @@ public class CommandLineTests
     public void Closed_ShowsTheStatusLineAndLetsKeysThrough()
     {
         var line = new CommandLine();
-        line.Status.Add("3 nodes");
+        line.Status.Add("3 files");
         Assert.False(line.Intercept(C('x')));
-        Assert.Equal("3 nodes", SurfaceText.Row(SurfaceText.Render(line, 12), 0).TrimEnd());
+        Assert.Equal("3 files", SurfaceText.Row(SurfaceText.Render(line, 12), 0).TrimEnd());
     }
 
     [Fact]
@@ -48,17 +48,17 @@ public class CommandLineTests
         var line = new CommandLine();
         var mode = line.CommandsFor(keymap);
         line.Open(mode);
-        Type(line, "ctx prod");
-        Assert.Equal(":ctx prod", SurfaceText.Row(SurfaceText.Render(line, 20), 0).TrimEnd());
+        Type(line, "cd docs");
+        Assert.Equal(":cd docs", SurfaceText.Row(SurfaceText.Render(line, 20), 0).TrimEnd());
 
         line.Intercept(K(Key.Enter));
         Assert.False(line.IsOpen);
-        Assert.Equal(["ctx prod"], ran);
-        Assert.Equal(["ctx prod"], mode.History!.Entries);
+        Assert.Equal(["cd docs"], ran);
+        Assert.Equal(["cd docs"], mode.History!.Entries);
 
         line.Open(mode);
         line.Intercept(K(Key.Up));
-        Assert.Equal("ctx prod", line.Input.Text);
+        Assert.Equal("cd docs", line.Input.Text);
     }
 
     [Fact]
@@ -114,11 +114,11 @@ public class CommandLineTests
     {
         string? got = null;
         var line = new CommandLine();
-        line.Ask("Replicas:", "", t => int.TryParse(t, out _) ? null : "not a number", t => got = t);
+        line.Ask("Retries:", "", t => int.TryParse(t, out _) ? null : "not a number", t => got = t);
 
         // No complaint before the user has typed anything.
         Assert.Null(line.Error);
-        Assert.Equal("Replicas:", SurfaceText.Row(SurfaceText.Render(line, 30), 0).TrimEnd());
+        Assert.Equal("Retries:", SurfaceText.Row(SurfaceText.Render(line, 30), 0).TrimEnd());
 
         Type(line, "x");
         line.Intercept(K(Key.Enter));
@@ -151,12 +151,12 @@ public class CommandLineTests
         var (keymap, _) = Commands();
         var line = new CommandLine { ShowCompletionPopup = false };
         line.Open(line.CommandsFor(keymap));
-        Type(line, "co");
-        Assert.Equal("ntext", line.Input.Suggestion);
-        Assert.Equal(":context", SurfaceText.Row(SurfaceText.Render(line, 20), 0).TrimEnd());
+        Type(line, "ch");
+        Assert.Equal("dir", line.Input.Suggestion);
+        Assert.Equal(":chdir", SurfaceText.Row(SurfaceText.Render(line, 20), 0).TrimEnd());
 
         line.Intercept(K(Key.Right));
-        Assert.Equal("context", line.Input.Text);
+        Assert.Equal("chdir", line.Input.Text);
     }
 
     [Fact]
@@ -166,16 +166,16 @@ public class CommandLineTests
         var line = new CommandLine();
         line.Open(line.CommandsFor(keymap));
         Type(line, "c");
-        Assert.Equal(["ctx", "context", "cordon"], Texts(line.Candidates));
+        Assert.Equal(["cd", "chdir", "copy"], Texts(line.Candidates));
 
         line.Intercept(K(Key.Tab));
-        Assert.Equal("ctx", line.Input.Text);
+        Assert.Equal("cd", line.Input.Text);
         line.Intercept(K(Key.Tab));
-        Assert.Equal("context", line.Input.Text);
+        Assert.Equal("chdir", line.Input.Text);
         line.Intercept(K(Key.Tab, KeyModifiers.Shift));
-        Assert.Equal("ctx", line.Input.Text);
+        Assert.Equal("cd", line.Input.Text);
         line.Intercept(K(Key.Tab, KeyModifiers.Shift));
-        Assert.Equal("cordon", line.Input.Text);
+        Assert.Equal("copy", line.Input.Text);
 
         // Typing ends the cycle and completes from the new text.
         Type(line, "x");
@@ -189,13 +189,13 @@ public class CommandLineTests
         var line = new CommandLine();
         var mode = line.CommandsFor(keymap);
         ((KeymapCompletionSource)mode.Completion!).Arguments = (action, typed) =>
-            action.Id == "ctx" ? ["prod-east", "prod-west", "staging"] : [];
+            action.Id == "cd" ? ["docs-old", "docs-new", "music"] : [];
         line.Open(mode);
-        Type(line, "ctx prod-w");
-        Assert.Equal(["ctx prod-west"], Texts(line.Candidates));
+        Type(line, "cd docs-n");
+        Assert.Equal(["cd docs-new"], Texts(line.Candidates));
         line.Intercept(K(Key.Tab));
         line.Intercept(K(Key.Enter));
-        Assert.Equal(["ctx prod-west"], ran);
+        Assert.Equal(["cd docs-new"], ran);
     }
 
     [Fact]
@@ -207,11 +207,11 @@ public class CommandLineTests
         Type(line, "c");
         var surface = new Surface(40, 6);
         line.Render(surface, new Rect(0, 5, 40, 1));
-        Assert.Contains("ctx", SurfaceText.Row(surface, 1), StringComparison.Ordinal);
-        Assert.Contains("Switch context", SurfaceText.Row(surface, 1), StringComparison.Ordinal);
-        Assert.Contains("cordon", SurfaceText.Row(surface, 3), StringComparison.Ordinal);
+        Assert.Contains("cd", SurfaceText.Row(surface, 1), StringComparison.Ordinal);
+        Assert.Contains("Change directory", SurfaceText.Row(surface, 1), StringComparison.Ordinal);
+        Assert.Contains("copy", SurfaceText.Row(surface, 3), StringComparison.Ordinal);
         Assert.StartsWith("╰", SurfaceText.Row(surface, 4).TrimStart());
-        Assert.Equal(":ctx", SurfaceText.Row(surface, 5).TrimEnd());
+        Assert.Equal(":cd", SurfaceText.Row(surface, 5).TrimEnd());
     }
 
     [Fact]

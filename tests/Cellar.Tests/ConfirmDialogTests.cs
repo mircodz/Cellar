@@ -28,9 +28,9 @@ public class ConfirmDialogTests
     public void Normal_YConfirms_NCancels_AndTogglesFlip()
     {
         var results = new List<ConfirmResult>();
-        var dialog = new ConfirmDialog("Restart web?")
+        var dialog = new ConfirmDialog("Empty trash?")
         {
-            Details = ["3 instances restart one at a time."],
+            Details = ["3 files are removed for good."],
             Toggles = [new ConfirmToggle('f', "force")],
             OnResult = results.Add,
             HasFocus = true,
@@ -39,8 +39,8 @@ public class ConfirmDialogTests
         var rows = Rows(dialog, 40, dialog.PreferredHeight(40));
         Assert.Equal(7, dialog.PreferredHeight(40));
         Assert.Contains("confirm", rows[0]);
-        Assert.Equal("│ Restart web?                         │", rows[1]);
-        Assert.Contains("3 instances restart", rows[2]);
+        Assert.Equal("│ Empty trash?                         │", rows[1]);
+        Assert.Contains("3 files are removed", rows[2]);
         Assert.Contains("[ ] f  force", rows[4]);
         Assert.Contains("y/enter confirm  n/esc cancel", rows[5]);
 
@@ -62,10 +62,10 @@ public class ConfirmDialogTests
     public void Destructive_NeedsTheNameTyped()
     {
         var results = new List<ConfirmResult>();
-        var dialog = new ConfirmDialog("Delete node web-01?")
+        var dialog = new ConfirmDialog("Delete report.pdf?")
         {
             Risk = ConfirmRisk.Destructive,
-            ConfirmText = "web-01",
+            ConfirmText = "report.pdf",
             Toggles = [new ConfirmToggle('f', "force")],
             OnResult = results.Add,
             HasFocus = true,
@@ -80,7 +80,7 @@ public class ConfirmDialogTests
         Assert.Contains("that doesn't match; esc cancels", string.Join("\n", Rows(dialog, 50, dialog.PreferredHeight(50))));
 
         dialog.OnEvent(K(Key.Backspace));
-        foreach (var c in "web-01")
+        foreach (var c in "report.pdf")
         {
             dialog.OnEvent(C(c));
         }
@@ -89,8 +89,8 @@ public class ConfirmDialogTests
         var rows = string.Join("\n", Rows(dialog, 50, dialog.PreferredHeight(50)));
         Assert.Contains("confirm · destructive", rows);
         Assert.Contains("[x] alt+f  force", rows);
-        Assert.Contains("Type web-01 to confirm.", rows);
-        Assert.Contains("web-01", rows);
+        Assert.Contains("Type report.pdf to confirm.", rows);
+        Assert.Contains("report.pdf", rows);
         dialog.OnEvent(K(Key.Enter));
         Assert.True(results[0].Confirmed);
         Assert.True(results[0].IsOn('f'));

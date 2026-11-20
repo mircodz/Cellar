@@ -12,12 +12,12 @@ namespace Cellar.Widgets;
 /// </summary>
 /// <example>
 /// <code>
-/// new AppAction("restart", "Restart the selected node", _ =&gt; Restart(Selected))
+/// new AppAction("open", "Open the selected file", _ =&gt; Open(Selected))
 /// {
-///     Group = "Node",
-///     Keys = ["ctrl+r"],
-///     Commands = ["restart"],
-///     Footer = "restart",
+///     Group = "File",
+///     Keys = ["enter", "o"],
+///     Commands = ["open"],
+///     Footer = "open",
 ///     When = () =&gt; Selected is not null,
 /// };
 /// </code>
@@ -27,7 +27,7 @@ public sealed class AppAction
     /// <param name="id">A stable name, used to remap keys (<see cref="Keymap.Remap(string, string?)"/>) and by
     /// scopes to replace an action of the same id below them.</param>
     /// <param name="title">What it does, as the help and the palette show it.</param>
-    /// <param name="run">Runs it, with the text typed after the command name (<c>:ctx prod</c> passes "prod"), or
+    /// <param name="run">Runs it, with the text typed after the command name (<c>:open notes.txt</c> passes "notes.txt"), or
     /// null when run by key, from the palette or with no argument.</param>
     public AppAction(string id, string title, Action<string?> run)
     {
@@ -69,7 +69,7 @@ public sealed class AppAction
     /// don't show anywhere. Null means always.</summary>
     public Func<bool>? When { get; init; }
 
-    /// <summary>A short label for the footer's key hints (<c>restart</c>), or null to leave it out of the footer.</summary>
+    /// <summary>A short label for the footer's key hints (<c>open</c>), or null to leave it out of the footer.</summary>
     public string? Footer { get; init; }
 
     /// <summary>Orders the footer's key hints, highest first, and decides which go first when the footer is too

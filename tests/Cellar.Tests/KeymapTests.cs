@@ -207,15 +207,15 @@ public class KeymapTests
     public void FindCommand_SplitsTheArgument()
     {
         string? argument = "unset";
-        var keymap = new Keymap().Add(new AppAction("ctx", "Switch context", a => argument = a) { Commands = ["ctx", "context"] });
+        var keymap = new Keymap().Add(new AppAction("cd", "Change directory", a => argument = a) { Commands = ["cd", "chdir"] });
 
-        var match = keymap.FindCommand(":Context  prod west ");
+        var match = keymap.FindCommand(":Chdir  my docs ");
         Assert.NotNull(match);
-        Assert.Equal("ctx", match.Value.Action.Id);
-        Assert.Equal("prod west", match.Value.Argument);
+        Assert.Equal("cd", match.Value.Action.Id);
+        Assert.Equal("my docs", match.Value.Argument);
         Assert.Null(keymap.FindCommand("nope"));
 
-        Assert.True(keymap.RunCommand("ctx"));
+        Assert.True(keymap.RunCommand("cd"));
         Assert.Null(argument);
         Assert.False(keymap.RunCommand("other"));
     }

@@ -433,8 +433,8 @@ public sealed class Keymap
     /// <summary>Forgets a started key sequence.</summary>
     public void CancelPending() => _pending.Clear();
 
-    /// <summary>Finds the available action for command text: <c>ctx prod</c> (or <c>:ctx prod</c>) finds the action
-    /// with the command <c>ctx</c> and the argument <c>prod</c>. Names are case-insensitive. Null if there's none.</summary>
+    /// <summary>Finds the available action for command text: <c>open notes.txt</c> (or <c>:open notes.txt</c>) finds the
+    /// action with the command <c>open</c> and the argument <c>notes.txt</c>. Names are case-insensitive. Null if there's none.</summary>
     public CommandMatch? FindCommand(string text)
     {
         if (string.IsNullOrWhiteSpace(text))

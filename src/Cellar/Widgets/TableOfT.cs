@@ -101,7 +101,7 @@ public sealed class Table<T> : TableBase<T>
     /// <summary>The column rows are grouped by, or -1.</summary>
     public int GroupColumn => _groupColumn;
 
-    /// <summary>Text after a group's value and count in its header line, e.g. "3 unhealthy". Called when the view is
+    /// <summary>Text after a group's value and count in its header line, e.g. "3 overdue". Called when the view is
     /// rebuilt, not per frame.</summary>
     public Func<TableGroup<T>, StyledText>? GroupSummary { get; set; }
 

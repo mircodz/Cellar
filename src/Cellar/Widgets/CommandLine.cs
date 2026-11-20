@@ -44,7 +44,7 @@ public sealed class CommandMode
 }
 
 /// <summary>
-/// The bottom line of a vim/k9s-style app: a <see cref="StatusLine"/> that turns into a one-line prompt while a
+/// The bottom line of a keyboard-driven, vim-style app: a <see cref="StatusLine"/> that turns into a one-line prompt while a
 /// <see cref="CommandMode"/> is open. The prompt edits with <see cref="Widgets.Input"/>'s readline keys, offers
 /// completions as dim ghost text (→ or tab accepts, tab again cycles) and a popup over the rows above, validates as
 /// you type, and returns to the status line on Enter or Esc.

@@ -523,7 +523,7 @@ internal static class Demos
     private static Widget ReadlineInput(DemoContext ctx)
     {
         var history = new InputHistory();
-        history.Load(["get nodes", "describe node _Node_3", "logs --tail 100 --follow"]);
+        history.Load(["ls -la ~/Music", "git log --oneline -5", "grep -rn TODO src"]);
         var log = new Label(new StyledText("(submitted lines show here)", Theme.Current.MutedStyle)) { Wrap = true };
         var lines = new List<string>();
         var shell = new Input { Placeholder = "type a command, enter submits, ↑ recalls…", History = history };
@@ -574,14 +574,14 @@ internal static class Demos
         keymap.Add(new AppAction("refresh", "Refresh", () => Ran("refresh")) { Keys = ["r", "f5"], Commands = ["refresh"], Footer = "refresh" });
         keymap.Add(new AppAction("top", "Go to the top", () => Ran("top (a two-key sequence)")) { Group = "Movement", Keys = ["g g"] });
         keymap.Add(new AppAction("bottom", "Go to the bottom", () => Ran("bottom")) { Group = "Movement", Keys = ["G"] });
-        keymap.Add(new AppAction("describe", "Describe", () => Ran("describe (app scope)")) { Group = "Row", Keys = ["e"] });
+        keymap.Add(new AppAction("details", "Show details", () => Ran("details (app scope)")) { Group = "Row", Keys = ["e"] });
         keymap.Add(new AppAction("help", "Show these keys", () => keymap.ShowHelp(ctx.App!)) { Keys = ["?"], When = () => ctx.App is not null });
         keymap.Add(new AppAction("palette", "Command palette", () => keymap.ShowPalette(ctx.App!)) { Keys = ["ctrl+o"], When = () => ctx.App is not null, ShowInPalette = false });
 
         bool pageOn = false;
         var page = keymap.AddScope("page", KeymapScope.PagePrecedence, () => pageOn);
         page.Add(new AppAction("edit", "Edit (page scope, takes e)", () => Ran("edit (page scope)")) { Group = "Row", Keys = ["e"] });
-        keymap.Add(new AppAction("scope", "Toggle the page scope", () => { pageOn = !pageOn; Ran(pageOn ? "page scope on: e edits" : "page scope off: e describes"); }) { Keys = ["s"] });
+        keymap.Add(new AppAction("scope", "Toggle the page scope", () => { pageOn = !pageOn; Ran(pageOn ? "page scope on: e edits" : "page scope off: e shows details"); }) { Keys = ["s"] });
 
         var help = keymap.CreateHelp();
         var body = new Stack(Direction.Horizontal)
@@ -608,9 +608,9 @@ internal static class Demos
         {
             line.Add(normal);
             line.Add(insert);
-            line.Add(new StatusItem(new StyledText("cluster ", Theme.Current.MutedStyle).Append("prod-west"), priority: 50) { ShortText = "prod-west" });
-            line.Add(new StatusItem("42 nodes", priority: 5) { ShortText = "42n" });
-            spinners.Add((SpinnerStatusItem)line.Add(new SpinnerStatusItem("refreshing", priority: 20)));
+            line.Add(new StatusItem(new StyledText("library ", Theme.Current.MutedStyle).Append("~/Music"), priority: 50) { ShortText = "~/Music" });
+            line.Add(new StatusItem("1,284 songs", priority: 5) { ShortText = "1284" });
+            spinners.Add((SpinnerStatusItem)line.Add(new SpinnerStatusItem("scanning", priority: 20)));
         }
 
         void Each(Action<StatusLine> act)
@@ -622,8 +622,8 @@ internal static class Demos
         }
 
         keymap.Add(new AppAction("info", "Show an info message", () => Each(l => l.Show("Saved 3 settings"))) { Keys = ["i"], Footer = "info", Priority = 5 });
-        keymap.Add(new AppAction("error", "Show an error", () => Each(l => l.ShowError("Couldn't reach the cluster: connection refused"))) { Keys = ["e"], Footer = "error", Priority = 4 });
-        keymap.Add(new AppAction("warn", "Show a warning", () => Each(l => l.Show("2 nodes are down", StatusLevel.Warning))) { Keys = ["w"], Footer = "warn", Priority = 3 });
+        keymap.Add(new AppAction("error", "Show an error", () => Each(l => l.ShowError("Couldn't reach the server: connection refused"))) { Keys = ["e"], Footer = "error", Priority = 4 });
+        keymap.Add(new AppAction("warn", "Show a warning", () => Each(l => l.Show("2 files couldn't be read", StatusLevel.Warning))) { Keys = ["w"], Footer = "warn", Priority = 3 });
         keymap.Add(new AppAction("dismiss", "Dismiss the message", () => Each(l => l.Dismiss())) { Keys = ["d"] });
         keymap.Add(new AppAction("spin", "Toggle the spinner", () => spinners.ForEach(s => s.Active = !s.Active)) { Keys = ["s"], Footer = "spinner", Priority = 2 });
         keymap.Add(new AppAction("mode", "Toggle the mode", () => (normal.Visible, insert.Visible) = (insert.Visible, normal.Visible)) { Keys = ["m"], Footer = "mode", Priority = 1 });
@@ -645,10 +645,10 @@ internal static class Demos
     }
 
     // A CommandLine sharing the bottom row with a StatusLine: ":" runs the keymap's commands (tab completes names
-    // and node arguments), "/" filters as you type, "r" asks for a new name and refuses invalid ones.
+    // and file name arguments), "/" filters as you type, "r" asks for a new name and refuses invalid ones.
     private static Widget CommandLineDemo(DemoContext ctx)
     {
-        var nodes = new List<string> { "node-east-01", "node-east-02", "node-west-01", "node-west-02", "node-west-03", "gpu-pool-01", "gpu-pool-02", "ingress-01" };
+        var files = new List<string> { "budget-2026.xlsx", "holiday-photos.zip", "notes.txt", "notes-old.txt", "recipe-pancakes.md", "report-draft.pdf", "report-final.pdf", "todo.txt" };
         string filter = "";
         var list = new Table { ShowHeader = false, ShowScrollbar = true, HasFocus = true };
         list.Columns.Add(new Column("", Constraint.Fill()));
@@ -662,25 +662,25 @@ internal static class Demos
         {
             string? current = select ?? (list.SelectedIndex >= 0 && list.SelectedIndex < list.Rows.Count ? list.Rows[list.SelectedIndex][0] : null);
             list.Rows.Clear();
-            foreach (var n in nodes.Where(n => n.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+            foreach (var n in files.Where(n => n.Contains(filter, StringComparison.OrdinalIgnoreCase)))
             {
                 list.Rows.Add(new[] { n });
             }
 
             int at = current is null ? -1 : list.Rows.FindIndex(r => r[0] == current);
             list.SelectedIndex = list.Rows.Count == 0 ? -1 : Math.Max(0, at);
-            count.Text = new StyledText($"{list.Rows.Count} of {nodes.Count} nodes", Theme.Current.MutedStyle)
+            count.Text = new StyledText($"{list.Rows.Count} of {files.Count} files", Theme.Current.MutedStyle)
                 .Append(filter.Length > 0 ? $"  /{filter}" : "", Theme.Current.AccentStyle);
         }
 
         string? Selected() => list.SelectedIndex >= 0 && list.SelectedIndex < list.Rows.Count ? list.Rows[list.SelectedIndex][0] : null;
 
         var commands = line.CommandsFor(keymap);
-        ((KeymapCompletionSource)commands.Completion!).Arguments = (action, typed) => action.Id == "goto" ? nodes : [];
+        ((KeymapCompletionSource)commands.Completion!).Arguments = (action, typed) => action.Id == "goto" ? files : [];
         var filterMode = new CommandMode("/")
         {
             History = new InputHistory(),
-            Placeholder = "filter nodes…",
+            Placeholder = "filter files…",
             OnChange = text => { filter = text; Reload(); },
             OnCancel = () => { filter = ""; Reload(); },
         };
@@ -688,12 +688,12 @@ internal static class Demos
         string? ValidName(string name, string? except) =>
             string.IsNullOrWhiteSpace(name) ? "a name is required"
             : name.Contains(' ', StringComparison.Ordinal) ? "no spaces"
-            : name != except && nodes.Contains(name) ? $"{name} already exists"
+            : name != except && files.Contains(name) ? $"{name} already exists"
             : null;
 
         keymap.Add(new AppAction("cmd", "Command", () => line.Open(commands)) { Keys = [":"], Footer = "cmd", Priority = 3, ShowInPalette = false });
-        keymap.Add(new AppAction("filter", "Filter nodes", () => line.Open(filterMode, filter)) { Keys = ["/"], Footer = "filter", Priority = 2 });
-        keymap.Add(new AppAction("rename", "Rename the node", () =>
+        keymap.Add(new AppAction("filter", "Filter files", () => line.Open(filterMode, filter)) { Keys = ["/"], Footer = "filter", Priority = 2 });
+        keymap.Add(new AppAction("rename", "Rename the file", () =>
         {
             if (Selected() is not { } old)
             {
@@ -702,12 +702,12 @@ internal static class Demos
 
             line.Ask("Rename to:", old, name => ValidName(name, old), name =>
             {
-                nodes[nodes.IndexOf(old)] = name;
+                files[files.IndexOf(old)] = name;
                 Reload(name);
                 line.Status.Show($"Renamed {old} to {name}", StatusLevel.Success);
             });
         }) { Keys = ["r"], Commands = ["rename"], Footer = "rename", Priority = 1, When = () => Selected() is not null });
-        keymap.Add(new AppAction("add", "Add a node", name =>
+        keymap.Add(new AppAction("add", "Add a file", name =>
         {
             string? problem = name is null ? "usage: add <name>" : ValidName(name, null);
             if (problem is not null)
@@ -716,25 +716,25 @@ internal static class Demos
                 return;
             }
 
-            nodes.Add(name!);
+            files.Add(name!);
             Reload(name);
         }) { Commands = ["add"], ArgumentHint = "<name>" });
-        keymap.Add(new AppAction("goto", "Select a node", name =>
+        keymap.Add(new AppAction("goto", "Select a file", name =>
         {
             filter = "";
             Reload(name);
-        }) { Commands = ["goto", "go"], ArgumentHint = "<node>" });
-        keymap.Add(new AppAction("delete", "Delete the node", () =>
+        }) { Commands = ["goto", "go"], ArgumentHint = "<file>" });
+        keymap.Add(new AppAction("delete", "Delete the file", () =>
         {
-            nodes.Remove(Selected()!);
+            files.Remove(Selected()!);
             Reload();
         }) { Commands = ["delete", "rm"], When = () => Selected() is not null });
 
         Reload();
         ctx.Intercept = line.Intercept;
-        line.Status.Show("Try :add db-01, :go <tab>, /west, or r to rename", StatusLevel.Info, TimeSpan.FromSeconds(30));
+        line.Status.Show("Try :add ideas.txt, :go <tab>, /report, or r to rename", StatusLevel.Info, TimeSpan.FromSeconds(30));
         var body = new Stack(Direction.Vertical)
-            .Add(new Panel(list, " nodes "), Constraint.Fill())
+            .Add(new Panel(list, "files"), Constraint.Fill())
             .Add(line, Constraint.Length(1));
         return Padded(new KeyHost(body, keymap));
     }
@@ -865,13 +865,13 @@ internal static class Demos
     {
         static List<FormField> Fields() =>
         [
-            new FormField("service", "Service", "fabric:/shop/web") { ReadOnly = true, Section = "Service", Hint = "the service these settings apply to" },
-            new FormField("instances", "Instances", "3") { Kind = FormFieldKind.Number, Min = 1, Max = 50, Integer = true, Section = "Service", Hint = "how many instances run, 1 to 50" },
-            new FormField("placement", "Placement", "spread") { Choices = ["spread", "pack", "zone-aware"], Section = "Service", Hint = "←/→ or enter to pick" },
-            new FormField("grace", "Close grace", "30s") { Kind = FormFieldKind.Duration, Note = "default 30s", Section = "Upgrade", Hint = "how long an instance gets to close: 90s, 5m, 1h30m" },
-            new FormField("monitored", "Monitored", "true") { Kind = FormFieldKind.Flag, Section = "Upgrade", Hint = "roll back when health checks fail" },
-            new FormField("token", "Deploy token", "s3cr3t-t0ken") { Kind = FormFieldKind.Secret, Section = "Upgrade", Hint = "never shown, also not while typing" },
-            new FormField("owner", "Owner", "team-web") { Section = "Upgrade", Validate = v => v.Contains(' ') ? "no spaces" : null },
+            new FormField("folder", "Folder", "~/Documents") { ReadOnly = true, Section = "Sync", Hint = "the folder these settings apply to" },
+            new FormField("retries", "Retries", "3") { Kind = FormFieldKind.Number, Min = 0, Max = 10, Integer = true, Section = "Sync", Hint = "how often a failed upload is retried, 0 to 10" },
+            new FormField("conflicts", "On conflict", "ask") { Choices = ["ask", "keep both", "newest wins"], Section = "Sync", Hint = "←/→ or enter to pick" },
+            new FormField("interval", "Interval", "15m") { Kind = FormFieldKind.Duration, Note = "default 15m", Section = "Schedule", Hint = "how often to sync: 90s, 5m, 1h30m" },
+            new FormField("paused", "Paused", "false") { Kind = FormFieldKind.Flag, Section = "Schedule", Hint = "stop syncing until turned back on" },
+            new FormField("token", "Access token", "s3cr3t-t0ken") { Kind = FormFieldKind.Secret, Section = "Account", Hint = "never shown, also not while typing" },
+            new FormField("device", "Device name", "laptop") { Section = "Account", Validate = v => v.Contains(' ') ? "no spaces" : null },
         ];
 
         var result = new Label(new StyledText("Nothing submitted yet.", Theme.Current.MutedStyle)) { Wrap = true };
@@ -899,7 +899,7 @@ internal static class Demos
         {
             if (ctx.App is { } app)
             {
-                FormDialog.Show(app, "web settings", Fields(), Report,
+                FormDialog.Show(app, "sync settings", Fields(), Report,
                     () => result.Content = new StyledText("Dialog cancelled.", Theme.Current.MutedStyle));
             }
         }) { Keys = ["o"] });
@@ -911,7 +911,7 @@ internal static class Demos
             "Press o for the same fields in a FormDialog.", Theme.Current.TextStyle)) { Wrap = true };
 
         var right = new Stack(Direction.Vertical)
-            .Add(note, Constraint.Length(10))
+            .Add(note, Constraint.Length(12))
             .Add(result, Constraint.Fill());
         var body = new Stack(Direction.Horizontal)
             .Add(new KeyHost(new Panel(form, "settings") { BorderStyle = BorderStyle.Rounded }, keymap), Constraint.Fill(3))
@@ -920,38 +920,38 @@ internal static class Demos
         return Padded(body);
     }
 
-    // Previews of both kinds of ConfirmDialog; r and d open them for real.
+    // Previews of both kinds of ConfirmDialog; t and d open them for real.
     private static Widget ConfirmDemo(DemoContext ctx)
     {
-        static ConfirmDialog Restart() => new("Restart web on node-west-02?")
+        static ConfirmDialog Trash() => new("Move 3 files to the trash?")
         {
-            Details = [new StyledText("3 instances restart one at a time; requests drain first.", Theme.Current.TextStyle)],
-            Toggles = [new ConfirmToggle('f', "force: skip draining")],
+            Details = [new StyledText("notes-old.txt, draft.md and draft-2.md can be restored from the trash.", Theme.Current.TextStyle)],
+            Toggles = [new ConfirmToggle('f', "force: also files that are open")],
         };
 
-        static ConfirmDialog Delete() => new("Delete node node-west-02?")
+        static ConfirmDialog Delete() => new("Delete report.pdf?")
         {
-            Details = [new StyledText("Its 12 replicas move to other nodes first.", Theme.Current.TextStyle)],
+            Details = [new StyledText("It is removed from every synced device, not moved to the trash.", Theme.Current.TextStyle)],
             Warning = "This can't be undone.",
             Risk = ConfirmRisk.Destructive,
-            ConfirmText = "node-west-02",
-            Toggles = [new ConfirmToggle('f', "force: don't wait for replicas")],
+            ConfirmText = "report.pdf",
+            Toggles = [new ConfirmToggle('f', "force: even if it's open")],
         };
 
-        var result = new Label(new StyledText("Press r or d.", Theme.Current.MutedStyle));
+        var result = new Label(new StyledText("Press t or d.", Theme.Current.MutedStyle));
         void Report(string what, ConfirmResult r) =>
             result.Content = r.Confirmed
                 ? new StyledText($"{what}: confirmed", new Style(Theme.Current.Success, Color.Default)).Append(r.IsOn('f') ? " (forced)" : "", Theme.Current.MutedStyle)
                 : new StyledText($"{what}: cancelled", Theme.Current.MutedStyle);
 
         var keymap = new Keymap();
-        keymap.Add(new AppAction("restart", "Ask to restart", () =>
+        keymap.Add(new AppAction("trash", "Ask to move to the trash", () =>
         {
             if (ctx.App is { } app)
             {
-                ConfirmDialog.Show(app, Restart(), r => Report("restart", r));
+                ConfirmDialog.Show(app, Trash(), r => Report("trash", r));
             }
-        }) { Keys = ["r"] });
+        }) { Keys = ["t"] });
         keymap.Add(new AppAction("delete", "Ask to delete", () =>
         {
             if (ctx.App is { } app)
@@ -960,20 +960,20 @@ internal static class Demos
             }
         }) { Keys = ["d"] });
 
-        var restart = Restart();
+        var trash = Trash();
         var delete = Delete();
         var note = new Label(new StyledText(
-            "r asks with y/n (f toggles force); d makes you type the node's name (alt+f toggles force). " +
+            "t asks with y/n (f toggles force); d makes you type the file's name (alt+f toggles force). " +
             "Esc cancels either. Below: what they look like.", Theme.Current.TextStyle)) { Wrap = true };
         var previews = new Stack(Direction.Horizontal)
-            .Add(restart, Constraint.Length(48))
+            .Add(trash, Constraint.Length(48))
             .Add(new Label(StyledText.Empty()), Constraint.Length(2))
             .Add(delete, Constraint.Length(48))
             .Add(new Label(StyledText.Empty()), Constraint.Fill());
         var body = new Stack(Direction.Vertical)
             .Add(new KeyHost(note, keymap), Constraint.Length(3))
             .Add(result, Constraint.Length(2))
-            .Add(previews, Constraint.Length(Math.Max(restart.PreferredHeight(48), delete.PreferredHeight(48))))
+            .Add(previews, Constraint.Length(Math.Max(trash.PreferredHeight(48), delete.PreferredHeight(48))))
             .Add(new Label(StyledText.Empty()), Constraint.Fill());
         return Padded(body);
     }

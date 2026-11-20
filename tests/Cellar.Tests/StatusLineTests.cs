@@ -15,10 +15,10 @@ public class StatusLineTests
     public void Items_AlignLeftAndRight()
     {
         var line = new StatusLine();
-        line.Add("pods");
+        line.Add("docs");
         line.Add("12 rows");
         line.Add("updated", StatusAlignment.Right);
-        Assert.Equal("pods  12 rows      updated", Line(line, 26));
+        Assert.Equal("docs  12 rows      updated", Line(line, 26));
     }
 
     [Fact]

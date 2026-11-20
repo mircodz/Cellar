@@ -14,9 +14,9 @@ namespace Cellar.Widgets;
 /// or cancelled.
 /// </summary>
 /// <example><code>
-/// FormDialog.Show(app, "scale web", [
-///     new FormField("replicas", "Replicas", "3") { Kind = FormFieldKind.Number, Min = 1, Max = 20, Integer = true },
-///     FormField.Choice("strategy", "Strategy", "rolling", ["rolling", "recreate"]),
+/// FormDialog.Show(app, "sync settings", [
+///     new FormField("retries", "Retries", "3") { Kind = FormFieldKind.Number, Min = 0, Max = 10, Integer = true },
+///     FormField.Choice("conflicts", "On conflict", "ask", ["ask", "keep both", "newest wins"]),
 /// ], changes => Apply(changes));
 /// </code></example>
 public sealed class FormDialog : Widget

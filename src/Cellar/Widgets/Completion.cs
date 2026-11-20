@@ -10,7 +10,7 @@ public sealed record CompletionItem(string Text, string? Description = null);
 
 /// <summary>
 /// Suggests how to finish what's been typed in a <see cref="CommandLine"/>. Candidates replace the whole line, so a
-/// source completing an argument returns "ctx prod", not "prod"; the best one comes first.
+/// source completing an argument returns "open notes.txt", not "notes.txt"; the best one comes first.
 /// </summary>
 public interface ICompletionSource
 {
@@ -46,8 +46,8 @@ public static class CompletionSource
 /// </summary>
 public sealed class KeymapCompletionSource(Keymap keymap) : ICompletionSource
 {
-    /// <summary>Argument values for an action, given what's been typed of the argument so far; e.g. the context
-    /// names for "ctx". The source keeps the ones that start with the typed text.</summary>
+    /// <summary>Argument values for an action, given what's been typed of the argument so far; e.g. the file
+    /// names for "open". The source keeps the ones that start with the typed text.</summary>
     public Func<AppAction, string, IEnumerable<string>>? Arguments { get; set; }
 
     public IReadOnlyList<CompletionItem> Complete(string text)

@@ -72,8 +72,15 @@ public abstract class TableBase<TRow> : Widget
     public List<TRow> Rows { get; } = new();
 
     public bool ShowHeader { get; set; } = true;
+
+    /// <summary>The selected line, or -1. On a <see cref="Table{T}"/> with a filter or grouping this counts the lines
+    /// on screen (group headers included), not <see cref="Rows"/>; without them the two are the same.</summary>
     public int SelectedIndex { get; set; } = -1;
     public int ScrollOffset { get; set; }
+
+    /// <summary>Drawn in the body when there's nothing to show, e.g. "no files" or "no rows match /draft". Spans without
+    /// a color are drawn muted. Null leaves the body blank.</summary>
+    public StyledText? EmptyText { get; set; }
 
     /// <summary>Header row style. Null follows the ambient theme's header style.</summary>
     public Style? HeaderStyle { get; set; }
@@ -136,6 +143,12 @@ public abstract class TableBase<TRow> : Widget
     private int[] _widths = [];
     private Constraint[] _constraints = [];
 
+    private StyledText? _emptySource;
+    private StyledText? _emptyDrawn;
+    private int _emptyVersion;
+    private Color _emptyColor;
+    private bool _replacing;
+
     public override bool IsFocusable => true;
 
     private protected abstract int ColumnCount { get; }
@@ -152,19 +165,66 @@ public abstract class TableBase<TRow> : Widget
     private protected abstract void RaiseSelect(int index);
     private protected abstract void RaiseActivate(int index);
 
-    /// <summary>Replaces the rows, keeping the current sort, and selects the first row (scrolled to the top).</summary>
+    /// <summary>How many lines the body has: the rows, or on a <see cref="Table{T}"/> the rows that pass its filter
+    /// plus group headers.</summary>
+    private protected virtual int LineCount => Rows.Count;
+
+    /// <summary>The index into <see cref="Rows"/> of body line <paramref name="line"/>, or -1 for a line that isn't
+    /// a row (a group header).</summary>
+    private protected virtual int RowAt(int line) => line;
+
+    /// <summary>Cells to the left of the first column, e.g. for row marks.</summary>
+    private protected virtual int GutterWidth => 0;
+
+    /// <summary>Draws the gutter of a row line.</summary>
+    private protected virtual void DrawGutter(Surface surface, Rect gutter, TRow row, Style style, bool selected) { }
+
+    /// <summary>Draws a body line that isn't a row (a group header) across <paramref name="line"/>.</summary>
+    private protected virtual void DrawLine(Surface surface, Rect line, int index, Style style, bool selected) { }
+
+    /// <summary>Gives a subclass the first look at a key while the table has focus.</summary>
+    private protected virtual bool HandleExtraKey(Terminal.KeyEvent key) => false;
+
+    /// <summary>Runs before <see cref="SetRows"/> replaces the rows.</summary>
+    private protected virtual void RowsReplacing() { }
+
+    /// <summary>Runs after <see cref="SetRows"/> replaced (and sorted) the rows: by default selects the first line,
+    /// scrolled to the top.</summary>
+    private protected virtual void RowsReplaced()
+    {
+        SelectedIndex = LineCount > 0 ? 0 : -1;
+        ScrollOffset = 0;
+    }
+
+    /// <summary>Runs before a sort reorders <see cref="Rows"/> (not during <see cref="SetRows"/>).</summary>
+    private protected virtual void RowsReordering() { }
+
+    /// <summary>Runs after a sort reordered <see cref="Rows"/> (not during <see cref="SetRows"/>).</summary>
+    private protected virtual void RowsReordered() { }
+
+    /// <summary>Replaces the rows, keeping the current sort, and selects the first row (scrolled to the top). A
+    /// <see cref="Table{T}"/> with a <see cref="Table{T}.RowKey"/> keeps the selection on the same row instead.</summary>
     public void SetRows(IEnumerable<TRow> rows)
     {
         var replacement = new List<TRow>(rows); // before clearing: the rows may be a query over Rows
+        RowsReplacing();
         Rows.Clear();
         Rows.AddRange(replacement);
         _originalOrder = null;
         if (SortColumn >= 0)
         {
-            ApplySort(SortColumn, SortState);
+            _replacing = true;
+            try
+            {
+                ApplySort(SortColumn, SortState);
+            }
+            finally
+            {
+                _replacing = false;
+            }
         }
-        SelectedIndex = Rows.Count > 0 ? 0 : -1;
-        ScrollOffset = 0;
+
+        RowsReplaced();
     }
 
     /// <summary>Cycles the sort on <paramref name="column"/>: None → Asc → Desc → None (None
@@ -200,6 +260,11 @@ public abstract class TableBase<TRow> : Widget
 
     private void ApplySort(int column, SortState state)
     {
+        if (!_replacing)
+        {
+            RowsReordering();
+        }
+
         SortColumn = column;
         SortState = state;
 
@@ -207,6 +272,11 @@ public abstract class TableBase<TRow> : Widget
         {
             RestoreOriginalOrder();
             SortColumn = -1;
+            if (!_replacing)
+            {
+                RowsReordered();
+            }
+
             return;
         }
 
@@ -247,6 +317,11 @@ public abstract class TableBase<TRow> : Widget
         {
             Rows.Add(k.Row);
         }
+
+        if (!_replacing)
+        {
+            RowsReordered();
+        }
     }
 
     private void CaptureOriginalOrder()
@@ -268,15 +343,15 @@ public abstract class TableBase<TRow> : Widget
 
         // Only restore rows that still exist (data may have changed since capture): each comes back once per
         // occurrence, in the order before the sort, then any rows added since.
-        var remaining = new Dictionary<RowKey, int>();
+        var remaining = new Dictionary<RowRef, int>();
         foreach (var row in Rows)
         {
-            remaining[new RowKey(row)] = remaining.GetValueOrDefault(new RowKey(row)) + 1;
+            remaining[new RowRef(row)] = remaining.GetValueOrDefault(new RowRef(row)) + 1;
         }
         var restored = new List<TRow>(Rows.Count);
         foreach (var row in _originalOrder.Concat(Rows))
         {
-            var key = new RowKey(row);
+            var key = new RowRef(row);
             if (remaining.TryGetValue(key, out int count) && count > 0)
             {
                 remaining[key] = count - 1;
@@ -290,15 +365,15 @@ public abstract class TableBase<TRow> : Widget
     }
 
     // A row as a dictionary key. Rows that are objects match by reference, so equal records stay distinct rows.
-    private readonly struct RowKey(TRow row) : IEquatable<RowKey>
+    private protected readonly struct RowRef(TRow row) : IEquatable<RowRef>
     {
         private readonly TRow _row = row;
 
-        public bool Equals(RowKey other) => typeof(TRow).IsValueType
+        public bool Equals(RowRef other) => typeof(TRow).IsValueType
             ? EqualityComparer<TRow>.Default.Equals(_row, other._row)
             : ReferenceEquals(_row, other._row);
 
-        public override bool Equals(object? obj) => obj is RowKey other && Equals(other);
+        public override bool Equals(object? obj) => obj is RowRef other && Equals(other);
 
         public override int GetHashCode() => _row is null ? 0
             : typeof(TRow).IsValueType ? EqualityComparer<TRow>.Default.GetHashCode(_row)
@@ -314,17 +389,25 @@ public abstract class TableBase<TRow> : Widget
 
         _bounds = area;
 
+        int lineCount = LineCount;
         int dataRowsVisible = area.Height - (ShowHeader ? 1 : 0);
-        bool overflowing = Rows.Count > dataRowsVisible;
+        bool overflowing = lineCount > dataRowsVisible;
         bool drawBar = ShowScrollbar && overflowing && area.Width > 1;
         int barWidth = drawBar ? 1 : 0;
 
-        var contentArea = new Rect(area.X, area.Y, area.Width - barWidth, area.Height);
+        var lineArea = new Rect(area.X, area.Y, area.Width - barWidth, area.Height);
+        int gutter = Math.Min(GutterWidth, lineArea.Width);
+        var contentArea = new Rect(lineArea.X + gutter, area.Y, lineArea.Width - gutter, area.Height);
         int[] widths = ResolveColumnWidths(contentArea.Width);
 
         int y = contentArea.Top;
         if (ShowHeader)
         {
+            if (gutter > 0)
+            {
+                surface.FillRect(new Rect(lineArea.X, y, gutter, 1), EffectiveHeader);
+            }
+
             DrawHeader(surface, contentArea, widths, y);
             RecordHeaderHits(contentArea, widths, y);
             y++;
@@ -334,21 +417,44 @@ public abstract class TableBase<TRow> : Widget
         int visibleRows = contentArea.Bottom - y;
         _dataTop = y;
         _dataViewportRows = visibleRows;
-        _dataArea = new Rect(contentArea.X, y, contentArea.Width, Math.Max(0, visibleRows));
+        _dataArea = new Rect(lineArea.X, y, lineArea.Width, Math.Max(0, visibleRows));
+        if (lineCount == 0 && EmptyText is { } empty && visibleRows > 0)
+        {
+            DrawEmpty(surface, new Rect(contentArea.X, y, contentArea.Width, 1), empty);
+        }
+
         for (int i = 0; i < visibleRows; i++)
         {
-            int rowIndex = firstRow + i;
-            if (rowIndex >= Rows.Count)
+            int line = firstRow + i;
+            if (line >= lineCount)
             {
                 break;
             }
 
-            bool selected = rowIndex == SelectedIndex;
-            bool striped = Striped && (rowIndex & 1) == 1;
+            bool selected = line == SelectedIndex;
+            bool striped = Striped && (line & 1) == 1;
             var style = selected ? EffectiveSelected : striped ? EffectiveStripe : EffectiveRow;
             if (selected || striped)
             {
-                surface.FillRect(new Rect(contentArea.X, y + i, contentArea.Width, 1), style);
+                surface.FillRect(new Rect(lineArea.X, y + i, lineArea.Width, 1), style);
+            }
+
+            int rowIndex = RowAt(line);
+            if (rowIndex < 0)
+            {
+                var full = new Rect(lineArea.X, y + i, lineArea.Width, 1);
+                surface.SetClip(full);
+                DrawLine(surface, full, line, style, selected);
+                surface.ResetClip();
+                continue;
+            }
+
+            if (gutter > 0)
+            {
+                var cell = new Rect(lineArea.X, y + i, gutter, 1);
+                surface.SetClip(cell);
+                DrawGutter(surface, cell, Rows[rowIndex], style, selected);
+                surface.ResetClip();
             }
 
             int x = contentArea.X;
@@ -370,7 +476,56 @@ public abstract class TableBase<TRow> : Widget
         {
             int barTop = area.Top + (ShowHeader ? 1 : 0);
             var barRect = new Rect(area.Right - 1, barTop, 1, area.Height - (ShowHeader ? 1 : 0));
-            Scrollbar.Render(surface, barRect, ScrollOffset, dataRowsVisible, Rows.Count);
+            Scrollbar.Render(surface, barRect, ScrollOffset, dataRowsVisible, lineCount);
+        }
+    }
+
+    // The empty-state text, centered, with uncolored spans in the muted color (rebuilt only when it changes).
+    private void DrawEmpty(Surface surface, Rect line, StyledText empty)
+    {
+        var muted = Theming.Theme.Current.Muted;
+        if (!ReferenceEquals(empty, _emptySource) || empty.Version != _emptyVersion || !_emptyColor.Equals(muted))
+        {
+            _emptySource = empty;
+            _emptyVersion = empty.Version;
+            _emptyColor = muted;
+            _emptyDrawn = StyledText.Empty();
+            foreach (var span in empty.Spans)
+            {
+                _emptyDrawn.Append(span.Style.Foreground.IsDefault ? span.WithStyle(span.Style.WithForeground(muted)) : span);
+            }
+        }
+
+        surface.SetClip(line);
+        TextRenderer.DrawLine(surface, line.X, line.Y, line.Width, _emptyDrawn!, Justify.Center);
+        surface.ResetClip();
+    }
+
+    /// <summary>Scrolls so the selected line is in view; with <paramref name="screenOffset"/>, puts it that many lines
+    /// below the top (as far as the rows allow), so a refresh doesn't move it on screen.</summary>
+    private protected void ScrollToSelection(int? screenOffset = null)
+    {
+        int count = LineCount;
+        if (SelectedIndex < 0 || count == 0)
+        {
+            ScrollOffset = 0;
+            return;
+        }
+
+        int dataRows = _dataViewportRows > 0 ? _dataViewportRows : count;
+        if (screenOffset is { } offset)
+        {
+            ScrollOffset = SelectedIndex - Math.Clamp(offset, 0, dataRows - 1);
+        }
+
+        ScrollOffset = Math.Clamp(ScrollOffset, 0, Math.Max(0, count - dataRows));
+        if (SelectedIndex < ScrollOffset)
+        {
+            ScrollOffset = SelectedIndex;
+        }
+        else if (SelectedIndex >= ScrollOffset + dataRows)
+        {
+            ScrollOffset = SelectedIndex - dataRows + 1;
         }
     }
 
@@ -381,13 +536,14 @@ public abstract class TableBase<TRow> : Widget
     /// <summary>Moves the selection by <paramref name="delta"/>, keeping it visible.</summary>
     public void MoveSelection(int delta, int viewportRows)
     {
-        if (Rows.Count == 0)
+        int count = LineCount;
+        if (count == 0)
         {
             return;
         }
 
         int previous = SelectedIndex;
-        SelectedIndex = Math.Clamp(SelectedIndex + delta, 0, Rows.Count - 1);
+        SelectedIndex = Math.Clamp(SelectedIndex + delta, 0, count - 1);
         if (SelectedIndex != previous)
         {
             RaiseSelect(SelectedIndex);
@@ -493,7 +649,7 @@ public abstract class TableBase<TRow> : Widget
         if (_dataArea.Contains(m.X, m.Y))
         {
             int rowIndex = ScrollOffset + (m.Y - _dataTop);
-            if (rowIndex >= 0 && rowIndex < Rows.Count)
+            if (rowIndex >= 0 && rowIndex < LineCount)
             {
                 bool reclick = rowIndex == SelectedIndex;
                 SetSelection(rowIndex);
@@ -510,6 +666,11 @@ public abstract class TableBase<TRow> : Widget
 
     private bool HandleKey(Terminal.KeyEvent key)
     {
+        if (HandleExtraKey(key))
+        {
+            return true;
+        }
+
         int viewport = _dataViewportRows + (ShowHeader ? 1 : 0);
         switch (key.Key)
         {
@@ -518,9 +679,9 @@ public abstract class TableBase<TRow> : Widget
             case Terminal.Key.PageUp: MoveSelection(-Math.Max(1, _dataViewportRows - 1), viewport); return true;
             case Terminal.Key.PageDown: MoveSelection(Math.Max(1, _dataViewportRows - 1), viewport); return true;
             case Terminal.Key.Home: SetSelection(0); return true;
-            case Terminal.Key.End: SetSelection(Rows.Count - 1); return true;
+            case Terminal.Key.End: SetSelection(LineCount - 1); return true;
             case Terminal.Key.Enter:
-                if (SelectedIndex >= 0 && SelectedIndex < Rows.Count)
+                if (SelectedIndex >= 0 && SelectedIndex < LineCount)
                 {
                     RaiseActivate(SelectedIndex);
                 }
@@ -532,18 +693,19 @@ public abstract class TableBase<TRow> : Widget
 
     private void SetSelection(int index)
     {
-        if (Rows.Count == 0)
+        int count = LineCount;
+        if (count == 0)
         {
             return;
         }
 
-        int clamped = Math.Clamp(index, 0, Rows.Count - 1);
+        int clamped = Math.Clamp(index, 0, count - 1);
         if (clamped != SelectedIndex)
         {
             SelectedIndex = clamped;
             RaiseSelect(SelectedIndex);
         }
-        int dataRows = _dataViewportRows > 0 ? _dataViewportRows : Rows.Count;
+        int dataRows = _dataViewportRows > 0 ? _dataViewportRows : count;
         if (SelectedIndex < ScrollOffset)
         {
             ScrollOffset = SelectedIndex;
@@ -675,49 +837,3 @@ public sealed class Table : TableBase<string[]>
     private protected override void RaiseActivate(int index) => OnActivate?.Invoke(index);
 }
 
-/// <summary>
-/// A table whose rows are objects: each <see cref="TableColumn{T}"/> draws a row's cell as styled text
-/// and sorts by a value of the row, and the callbacks receive the row itself, wherever sorting has moved it.
-/// </summary>
-public sealed class Table<T> : TableBase<T>
-{
-    public List<TableColumn<T>> Columns { get; } = new();
-
-    /// <summary>Raised when the selected row changes, with the newly selected row.</summary>
-    public Action<T>? OnSelect { get; set; }
-
-    /// <summary>Raised when a row is activated (double-click or Enter).</summary>
-    public Action<T>? OnActivate { get; set; }
-
-    private protected override int ColumnCount => Columns.Count;
-    private protected override string ColumnHeader(int column) => Columns[column].Header;
-    private protected override Constraint ColumnWidth(int column) => Columns[column].Width;
-    private protected override Justify ColumnJustify(int column) => Columns[column].Justify;
-
-    private protected override (IComparable? Key, string Text) SortValue(T row, int column)
-    {
-        var col = Columns[column];
-        IComparable? key = col.SortKey?.Invoke(row);
-        return (key, key is null ? col.Render(row).PlainText : string.Empty);
-    }
-
-    private protected override void DrawCell(Surface surface, Rect cell, T row, int column, Style style, bool selected)
-    {
-        var col = Columns[column];
-        var content = col.Render(row);
-        var drawn = StyledText.Empty();
-        foreach (var span in content.Spans)
-        {
-            // The selection's colors win; elsewhere a span keeps its own and takes the row's where it has none.
-            var own = span.Style;
-            drawn.Append(span.WithStyle(selected ? style : new Style(
-                own.Foreground.IsDefault ? style.Foreground : own.Foreground,
-                own.Background.IsDefault ? style.Background : own.Background,
-                own.Attributes | style.Attributes)));
-        }
-        TextRenderer.DrawLine(surface, cell.X, cell.Y, cell.Width, drawn, col.Justify);
-    }
-
-    private protected override void RaiseSelect(int index) => OnSelect?.Invoke(Rows[index]);
-    private protected override void RaiseActivate(int index) => OnActivate?.Invoke(Rows[index]);
-}

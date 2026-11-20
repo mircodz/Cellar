@@ -50,3 +50,25 @@ internal sealed class KeySink(Key key) : Widget
         return false;
     }
 }
+
+// Reads rendered text back from a surface.
+internal static class SurfaceText
+{
+    public static string Row(Rendering.Surface s, int y)
+    {
+        var sb = new StringBuilder();
+        for (int x = 0; x < s.Width; x++)
+        {
+            var g = s.Get(x, y).Grapheme;
+            sb.Append(g.Length == 0 ? " " : g);
+        }
+        return sb.ToString();
+    }
+
+    public static Rendering.Surface Render(Widget widget, int width, int height = 1)
+    {
+        var surface = new Rendering.Surface(width, height);
+        widget.Render(surface, surface.Bounds);
+        return surface;
+    }
+}

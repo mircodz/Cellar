@@ -177,6 +177,13 @@ public sealed class InputDecoder
             return TryParseSs3(events);
         }
 
+        // ESC DEL (or ESC BS) is what terminals send for Alt+Backspace (Option+Backspace on macOS).
+        if (second is 0x7f or 0x08)
+        {
+            events.Add(new KeyEvent(Key.Backspace, default, KeyModifiers.Alt));
+            return 2;
+        }
+
         // ESC followed by a printable char => Alt+char.
         if (second is >= 0x20 and < 0x7f)
         {

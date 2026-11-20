@@ -14,6 +14,9 @@ public sealed class StyledText
 {
     private readonly List<Span> _spans = new();
 
+    // Bumped by every change to the spans, so a widget caching something built from this text can tell it's stale.
+    internal int Version { get; private set; }
+
     public StyledText() { }
 
     public StyledText(string text, Primitives.Style style = default)
@@ -36,6 +39,7 @@ public sealed class StyledText
         if (!string.IsNullOrEmpty(text))
         {
             _spans.Add(new Span(text, Style.Default));
+            Version++;
         }
 
         return this;
@@ -47,6 +51,7 @@ public sealed class StyledText
         if (!string.IsNullOrEmpty(text))
         {
             _spans.Add(new Span(text, style));
+            Version++;
         }
 
         return this;
@@ -58,6 +63,7 @@ public sealed class StyledText
         if (!string.IsNullOrEmpty(text))
         {
             _spans.Add(new Span(text, style, link));
+            Version++;
         }
 
         return this;
@@ -69,6 +75,7 @@ public sealed class StyledText
         if (!string.IsNullOrEmpty(span.Text))
         {
             _spans.Add(span);
+            Version++;
         }
 
         return this;
@@ -78,6 +85,7 @@ public sealed class StyledText
     public StyledText Append(StyledText other)
     {
         _spans.AddRange(other._spans);
+        Version++;
         return this;
     }
 
@@ -167,6 +175,7 @@ public sealed class StyledText
 
         int i = _spans.Count - 1;
         _spans[i] = f(_spans[i]);
+        Version++;
         return this;
     }
 

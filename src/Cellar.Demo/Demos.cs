@@ -15,6 +15,11 @@ namespace Cellar.Demo;
 /// <summary>One frame in the tree demo: a name, self time, share, and a synthetic heap address.</summary>
 internal readonly record struct TraceFrame(string Name, double Ms, double Percent, long Addr = 0);
 
+/// <summary>One row of the table views demo.</summary>
+internal sealed record DemoTask(string Name, string State, int Attempts, TimeSpan Age);
+
+internal sealed record DemoMessage(string From, string Subject, string Received);
+
 /// <summary>One row of the table demo: where something allocates, and how much.</summary>
 internal sealed record AllocationSite(string Type, string Method, string Allocator, double MiB, int Count, double OwnPercent)
 {
@@ -28,6 +33,7 @@ internal static class Demos
     public static readonly IReadOnlyList<Demo> All =
     [
         new("Table", "rows as objects: styled cells, sort by value, filter", Table),
+        new("Table views", "live refresh by key, filter, groups, marks", TableViews),
         new("Tree", "collapsible, lazy, clickable links", Tree),
         new("Tabs", "tabbed container with a lens bar", TabsDemo),
         new("Dashboard", "many widgets composed on one page", Dashboard),
@@ -40,6 +46,15 @@ internal static class Demos
         new("Progress", "sub-cell bars with labels (live)", Progress),
         new("Spinners", "indeterminate animations (live)", Spinners),
         new("Input & forms", "text fields, masking, live filter", Input),
+        new("Readline input", "ctrl+w, alt+b, ctrl+u… and ↑/↓ history", ReadlineInput),
+        new("Keymap", "one declaration: keys, :commands, help, palette", KeymapDemo),
+        new("Status line", "items that give way by priority, messages, key hints", StatusLineDemo),
+        new("Command line", ":commands with completion, / filter, questions", CommandLineDemo),
+        new("Form", "settings to review and change, as a page or a dialog", FormDemo),
+        new("Confirm dialog", "y/n, or type the name; toggles like force", ConfirmDemo),
+        new("Text viewer", "pager: / search, n/N, wrap, JSON and XML colors", TextViewerDemo),
+        new("Switcher", "one place, several views; focus and lifecycle follow", SwitcherDemo),
+        new("Activity", "background tasks on one line, and in full", ActivityDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -506,6 +521,641 @@ internal static class Demos
             .Add(new Panel(filter), Constraint.Length(3))
             .Add(new Padding(results, new Thickness(1, 0)), Constraint.Fill());
         body.HasFocus = true;
+        return Padded(body);
+    }
+
+    // Every Input understands the readline keys, and browses an InputHistory with ↑/↓ when given one.
+    private static Widget ReadlineInput(DemoContext ctx)
+    {
+        var history = new InputHistory();
+        history.Load(["ls -la ~/Music", "git log --oneline -5", "grep -rn TODO src"]);
+        var log = new Label(new StyledText("(submitted lines show here)", Theme.Current.MutedStyle)) { Wrap = true };
+        var lines = new List<string>();
+        var shell = new Input { Placeholder = "type a command, enter submits, ↑ recalls…", History = history };
+        shell.OnSubmit = text =>
+        {
+            lines.Insert(0, "❯ " + text);
+            log.Content = new StyledText(string.Join("\n", lines.Take(8)), Theme.Current.TextStyle);
+            shell.Text = "";
+        };
+
+        var keys = StyledText.Empty();
+        foreach (var (key, what) in new[]
+        {
+            ("ctrl+a / ctrl+e", "start / end of line"),
+            ("alt+b / alt+f, ctrl+← / ctrl+→", "word left / right"),
+            ("ctrl+w", "delete back to whitespace"),
+            ("alt+backspace / alt+d", "delete word back / forward"),
+            ("ctrl+u / ctrl+k", "delete to start / end"),
+            ("ctrl+y", "paste what was deleted"),
+            ("↑ / ↓", "browse history (keeps what you were typing)"),
+        })
+        {
+            keys.Append(key.PadRight(34)).Bold().Fg(Theme.Current.Accent).Append(what + "\n").Fg(Theme.Current.Muted);
+        }
+
+        var body = new Stack(Direction.Vertical)
+            .Add(new Panel(shell, "shell"), Constraint.Length(3))
+            .Add(new Padding(new Label(keys) { Wrap = true }, new Thickness(1, 1)), Constraint.Length(9))
+            .Add(new Rule(StyledText.Of("submitted")), Constraint.Length(1))
+            .Add(new Padding(log, new Thickness(1, 0)), Constraint.Fill());
+        body.HasFocus = true;
+        return Padded(body);
+    }
+
+    // A Keymap of AppActions: the keys below, the help screen (?) and the palette (ctrl+o here) all come from
+    // the same declarations. A page scope rebinds a key while it's switched on.
+    private static Widget KeymapDemo(DemoContext ctx)
+    {
+        var ran = new List<string>();
+        var log = new Label(StyledText.Empty()) { Wrap = true };
+        void Ran(string what)
+        {
+            ran.Insert(0, $"{DateTime.Now:HH:mm:ss}  {what}");
+            log.Content = new StyledText(string.Join("\n", ran.Take(12)), Theme.Current.TextStyle);
+        }
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("refresh", "Refresh", () => Ran("refresh")) { Keys = ["r", "f5"], Commands = ["refresh"], Footer = "refresh" });
+        keymap.Add(new AppAction("top", "Go to the top", () => Ran("top (a two-key sequence)")) { Group = "Movement", Keys = ["g g"] });
+        keymap.Add(new AppAction("bottom", "Go to the bottom", () => Ran("bottom")) { Group = "Movement", Keys = ["G"] });
+        keymap.Add(new AppAction("details", "Show details", () => Ran("details (app scope)")) { Group = "Row", Keys = ["e"] });
+        keymap.Add(new AppAction("help", "Show these keys", () => keymap.ShowHelp(ctx.App!)) { Keys = ["?"], When = () => ctx.App is not null });
+        keymap.Add(new AppAction("palette", "Command palette", () => keymap.ShowPalette(ctx.App!)) { Keys = ["ctrl+o"], When = () => ctx.App is not null, ShowInPalette = false });
+
+        bool pageOn = false;
+        var page = keymap.AddScope("page", KeymapScope.PagePrecedence, () => pageOn);
+        page.Add(new AppAction("edit", "Edit (page scope, takes e)", () => Ran("edit (page scope)")) { Group = "Row", Keys = ["e"] });
+        keymap.Add(new AppAction("scope", "Toggle the page scope", () => { pageOn = !pageOn; Ran(pageOn ? "page scope on: e edits" : "page scope off: e shows details"); }) { Keys = ["s"] });
+
+        var help = keymap.CreateHelp();
+        var body = new Stack(Direction.Horizontal)
+            .Add(new Panel(new KeyHost(log, keymap, help.Refresh), "what ran"), Constraint.Fill())
+            .Add(new Panel(help, "generated help"), Constraint.Fill());
+        Ran("press r, g g, G, e, s, ? or ctrl+o");
+        return Padded(body);
+    }
+
+    // A StatusLine: items left and right that shorten and then drop by priority as the line narrows, key hints
+    // generated from a Keymap (click them), a mode badge, a spinner, and messages that take the line over.
+    private static Widget StatusLineDemo(DemoContext ctx)
+    {
+        var keymap = new Keymap();
+        var wide = new StatusLine { Keymap = keymap, ErrorHint = new StyledText("d dismiss", Theme.Current.MutedStyle) };
+        var narrow = new StatusLine { Keymap = keymap };
+        var lines = new[] { wide, narrow };
+
+        var normal = StatusItem.Badge("NORMAL");
+        var insert = StatusItem.Badge("INSERT", Theme.Current.Success);
+        insert.Visible = false;
+        var spinners = new List<SpinnerStatusItem>();
+        foreach (var line in lines)
+        {
+            line.Add(normal);
+            line.Add(insert);
+            line.Add(new StatusItem(new StyledText("library ", Theme.Current.MutedStyle).Append("~/Music"), priority: 50) { ShortText = "~/Music" });
+            line.Add(new StatusItem("1,284 songs", priority: 5) { ShortText = "1284" });
+            spinners.Add((SpinnerStatusItem)line.Add(new SpinnerStatusItem("scanning", priority: 20)));
+        }
+
+        void Each(Action<StatusLine> act)
+        {
+            foreach (var line in lines)
+            {
+                act(line);
+            }
+        }
+
+        keymap.Add(new AppAction("info", "Show an info message", () => Each(l => l.Show("Saved 3 settings"))) { Keys = ["i"], Footer = "info", Priority = 5 });
+        keymap.Add(new AppAction("error", "Show an error", () => Each(l => l.ShowError("Couldn't reach the server: connection refused"))) { Keys = ["e"], Footer = "error", Priority = 4 });
+        keymap.Add(new AppAction("warn", "Show a warning", () => Each(l => l.Show("2 files couldn't be read", StatusLevel.Warning))) { Keys = ["w"], Footer = "warn", Priority = 3 });
+        keymap.Add(new AppAction("dismiss", "Dismiss the message", () => Each(l => l.Dismiss())) { Keys = ["d"] });
+        keymap.Add(new AppAction("spin", "Toggle the spinner", () => spinners.ForEach(s => s.Active = !s.Active)) { Keys = ["s"], Footer = "spinner", Priority = 2 });
+        keymap.Add(new AppAction("mode", "Toggle the mode", () => (normal.Visible, insert.Visible) = (insert.Visible, normal.Visible)) { Keys = ["m"], Footer = "mode", Priority = 1 });
+
+        var note = new Label(new StyledText(
+            "Press i, w or e for messages (info and warnings fade after 5s, errors stay until d), s for the spinner, " +
+            "m to switch the mode badge. The key hints on the right come from the Keymap and are clickable.\n\n" +
+            "The second line is narrower: items fall back to their short text from the lowest priority up (hints keep " +
+            "just their keys), and when that isn't enough the least important drop out.", Theme.Current.TextStyle)) { Wrap = true };
+
+        var body = new Stack(Direction.Vertical)
+            .Add(new KeyHost(note, keymap), Constraint.Fill())
+            .Add(new Rule(StyledText.Of("full width")), Constraint.Length(1))
+            .Add(wide, Constraint.Length(1))
+            .Add(new Label(StyledText.Empty()), Constraint.Length(1))
+            .Add(new Rule(StyledText.Of("44 columns")), Constraint.Length(1))
+            .Add(new Stack(Direction.Horizontal).Add(narrow, Constraint.Length(44)).Add(new Label(StyledText.Empty()), Constraint.Fill()), Constraint.Length(1));
+        return Padded(body);
+    }
+
+    // A CommandLine sharing the bottom row with a StatusLine: ":" runs the keymap's commands (tab completes names
+    // and file name arguments), "/" filters as you type, "r" asks for a new name and refuses invalid ones.
+    private static Widget CommandLineDemo(DemoContext ctx)
+    {
+        var files = new List<string> { "budget-2026.xlsx", "holiday-photos.zip", "notes.txt", "notes-old.txt", "recipe-pancakes.md", "report-draft.pdf", "report-final.pdf", "todo.txt" };
+        string filter = "";
+        var list = new Table { ShowHeader = false, ShowScrollbar = true, HasFocus = true };
+        list.Columns.Add(new Column("", Constraint.Fill()));
+
+        var keymap = new Keymap();
+        var line = new CommandLine();
+        var count = line.Status.Add(new StatusItem("", priority: 10));
+        line.Status.Keymap = keymap;
+
+        void Reload(string? select = null)
+        {
+            string? current = select ?? (list.SelectedIndex >= 0 && list.SelectedIndex < list.Rows.Count ? list.Rows[list.SelectedIndex][0] : null);
+            list.Rows.Clear();
+            foreach (var n in files.Where(n => n.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+            {
+                list.Rows.Add(new[] { n });
+            }
+
+            int at = current is null ? -1 : list.Rows.FindIndex(r => r[0] == current);
+            list.SelectedIndex = list.Rows.Count == 0 ? -1 : Math.Max(0, at);
+            count.Text = new StyledText($"{list.Rows.Count} of {files.Count} files", Theme.Current.MutedStyle)
+                .Append(filter.Length > 0 ? $"  /{filter}" : "", Theme.Current.AccentStyle);
+        }
+
+        string? Selected() => list.SelectedIndex >= 0 && list.SelectedIndex < list.Rows.Count ? list.Rows[list.SelectedIndex][0] : null;
+
+        var commands = line.CommandsFor(keymap);
+        ((KeymapCompletionSource)commands.Completion!).Arguments = (action, typed) => action.Id == "goto" ? files : [];
+        var filterMode = new CommandMode("/")
+        {
+            History = new InputHistory(),
+            Placeholder = "filter files…",
+            OnChange = text => { filter = text; Reload(); },
+            OnCancel = () => { filter = ""; Reload(); },
+        };
+
+        string? ValidName(string name, string? except) =>
+            string.IsNullOrWhiteSpace(name) ? "a name is required"
+            : name.Contains(' ', StringComparison.Ordinal) ? "no spaces"
+            : name != except && files.Contains(name) ? $"{name} already exists"
+            : null;
+
+        keymap.Add(new AppAction("cmd", "Command", () => line.Open(commands)) { Keys = [":"], Footer = "cmd", Priority = 3, ShowInPalette = false });
+        keymap.Add(new AppAction("filter", "Filter files", () => line.Open(filterMode, filter)) { Keys = ["/"], Footer = "filter", Priority = 2 });
+        keymap.Add(new AppAction("rename", "Rename the file", () =>
+        {
+            if (Selected() is not { } old)
+            {
+                return;
+            }
+
+            line.Ask("Rename to:", old, name => ValidName(name, old), name =>
+            {
+                files[files.IndexOf(old)] = name;
+                Reload(name);
+                line.Status.Show($"Renamed {old} to {name}", StatusLevel.Success);
+            });
+        }) { Keys = ["r"], Commands = ["rename"], Footer = "rename", Priority = 1, When = () => Selected() is not null });
+        keymap.Add(new AppAction("add", "Add a file", name =>
+        {
+            string? problem = name is null ? "usage: add <name>" : ValidName(name, null);
+            if (problem is not null)
+            {
+                line.Status.ShowError(problem);
+                return;
+            }
+
+            files.Add(name!);
+            Reload(name);
+        }) { Commands = ["add"], ArgumentHint = "<name>" });
+        keymap.Add(new AppAction("goto", "Select a file", name =>
+        {
+            filter = "";
+            Reload(name);
+        }) { Commands = ["goto", "go"], ArgumentHint = "<file>" });
+        keymap.Add(new AppAction("delete", "Delete the file", () =>
+        {
+            files.Remove(Selected()!);
+            Reload();
+        }) { Commands = ["delete", "rm"], When = () => Selected() is not null });
+
+        Reload();
+        ctx.Intercept = line.Intercept;
+        line.Status.Show("Try :add ideas.txt, :go <tab>, /report, or r to rename", StatusLevel.Info, TimeSpan.FromSeconds(30));
+        var body = new Stack(Direction.Vertical)
+            .Add(new Panel(list, "files"), Constraint.Fill())
+            .Add(line, Constraint.Length(1));
+        return Padded(new KeyHost(body, keymap));
+    }
+
+    // Table<T> as a live task queue: rows refresh every two seconds and keep the selection by RowKey (changed
+    // cells flash bold), "/" filters as you type, "g" groups by state, space and * mark rows.
+    private static Widget TableViews(DemoContext ctx)
+    {
+        var rng = new Random(11);
+        string[] states = ["Running", "Running", "Done", "Queued", "Failed"];
+        string[] kinds = ["backup", "export", "resize", "sync"];
+        var tasks = Enumerable.Range(0, 40).Select(i => new DemoTask(
+            $"{kinds[i % kinds.Length]}-{i:00}",
+            states[rng.Next(states.Length)], rng.Next(0, 6), TimeSpan.FromMinutes(rng.Next(1, 600)))).ToList();
+
+        var table = new Table<DemoTask>
+        {
+            ShowHeader = true, Striped = true, ShowScrollbar = true, Sortable = true, HasFocus = true,
+            RowKey = t => t.Name, HighlightChanges = true, Markable = true,
+            EmptyText = new StyledText("no tasks match"),
+            GroupSummary = g => new StyledText($"{g.Rows.Sum(t => t.Attempts)} attempts", Theme.Current.MutedStyle),
+        };
+        static Style StateStyle(string state) => new(state switch
+        {
+            "Running" => Theme.Current.Info,
+            "Done" => Theme.Current.Success,
+            "Queued" => Theme.Current.Warning,
+            _ => Theme.Current.Error,
+        }, Color.Default);
+        table.Columns.Add(new TableColumn<DemoTask>("Name", Constraint.Fill(2), t => t.Name));
+        table.Columns.Add(new TableColumn<DemoTask>("State", Constraint.Length(9), t => new StyledText(t.State, StateStyle(t.State))));
+        table.Columns.Add(new TableColumn<DemoTask>("Attempts", Constraint.Length(9), t => t.Attempts.ToString(CultureInfo.InvariantCulture), Justify.Right) { SortKey = t => t.Attempts });
+        table.Columns.Add(new TableColumn<DemoTask>("Age", Constraint.Length(8), t => FormatAge(t.Age), Justify.Right) { SortKey = t => t.Age });
+        table.SetRows(tasks);
+
+        var keymap = new Keymap();
+        var line = new CommandLine();
+        var count = line.Status.Add(new StatusItem("", priority: 10));
+        line.Status.Keymap = keymap;
+        string query = "";
+        void UpdateCount() => count.Text = new StyledText($"{table.FilteredRows.Count}/{tasks.Count} tasks", Theme.Current.MutedStyle)
+            .Append(table.Marked.Count > 0 ? $"  {table.Marked.Count} marked" : "", Theme.Current.AccentStyle)
+            .Append(query.Length > 0 ? $"  /{query}" : "", Theme.Current.AccentStyle);
+        table.OnMarksChanged = UpdateCount;
+
+        void SetFilter(string text)
+        {
+            query = text;
+            table.Filter = text.Length == 0 ? null : t => table.ContainsText(t, text);
+            UpdateCount();
+        }
+
+        var filter = new CommandMode("/")
+        {
+            History = new InputHistory(),
+            Placeholder = "text in any column, e.g. failed or backup",
+            OnChange = SetFilter,
+            OnCancel = () => SetFilter(""),
+        };
+        keymap.Add(new AppAction("filter", "Filter", () => line.Open(filter, query)) { Keys = ["/"], Footer = "filter", Priority = 4 });
+        keymap.Add(new AppAction("group", "Group by state", () =>
+        {
+            if (table.GroupColumn < 0)
+            {
+                table.GroupBy("State");
+            }
+            else
+            {
+                table.Ungroup();
+            }
+        }) { Keys = ["g"], Footer = "group", Priority = 3 });
+        keymap.Add(new AppAction("mark", "Mark", () =>
+        {
+            if (table.Selected is { } task)
+            {
+                table.ToggleMark(task);
+            }
+        }) { Keys = ["space"], Footer = "mark", Priority = 2 });
+        keymap.Add(new AppAction("delete", "Remove marked", () =>
+        {
+            var doomed = table.Marked.Select(t => t.Name).ToHashSet();
+            tasks.RemoveAll(t => doomed.Contains(t.Name));
+            table.SetRows(tasks);
+            line.Status.Show($"Removed {doomed.Count} tasks", StatusLevel.Success);
+            UpdateCount();
+        }) { Keys = ["ctrl+d"], Footer = "remove marked", Priority = 1, When = () => table.Marked.Count > 0 });
+
+        // Every two seconds a few tasks retry or change state, and now and then one finishes and a new one queues.
+        int ticks = 0;
+        ctx.Tick += _ =>
+        {
+            if (++ticks % 25 != 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < 3 && tasks.Count > 0; i++)
+            {
+                int at = rng.Next(tasks.Count);
+                tasks[at] = tasks[at] with { Attempts = tasks[at].Attempts + 1, State = states[rng.Next(states.Length)] };
+            }
+
+            if (rng.Next(3) == 0 && tasks.Count > 0)
+            {
+                tasks.RemoveAt(rng.Next(tasks.Count));
+                tasks.Add(new DemoTask($"upload-{ticks / 25:000}", "Queued", 0, TimeSpan.Zero));
+            }
+
+            tasks = tasks.Select(t => t with { Age = t.Age + TimeSpan.FromSeconds(2) }).ToList();
+            table.SetRows(tasks);
+            UpdateCount();
+        };
+
+        UpdateCount();
+        ctx.Intercept = line.Intercept;
+        var body = new Stack(Direction.Vertical)
+            .Add(table, Constraint.Fill())
+            .Add(line, Constraint.Length(1));
+        return Padded(new KeyHost(body, keymap));
+    }
+
+    private static string FormatAge(TimeSpan age) => age.TotalHours >= 1
+        ? $"{(int)age.TotalHours}h{age.Minutes:00}m"
+        : $"{age.Minutes}m{age.Seconds:00}s";
+
+    // A Form embedded in the page, and the same fields in a FormDialog on "o". Submitting shows what changed.
+    private static Widget FormDemo(DemoContext ctx)
+    {
+        static List<FormField> Fields() =>
+        [
+            new FormField("folder", "Folder", "~/Documents") { ReadOnly = true, Section = "Sync", Hint = "the folder these settings apply to" },
+            new FormField("retries", "Retries", "3") { Kind = FormFieldKind.Number, Min = 0, Max = 10, Integer = true, Section = "Sync", Hint = "how often a failed upload is retried, 0 to 10" },
+            new FormField("conflicts", "On conflict", "ask") { Choices = ["ask", "keep both", "newest wins"], Section = "Sync", Hint = "←/→ or enter to pick" },
+            new FormField("interval", "Interval", "15m") { Kind = FormFieldKind.Duration, Note = "default 15m", Section = "Schedule", Hint = "how often to sync: 90s, 5m, 1h30m" },
+            new FormField("paused", "Paused", "false") { Kind = FormFieldKind.Flag, Section = "Schedule", Hint = "stop syncing until turned back on" },
+            new FormField("token", "Access token", "s3cr3t-t0ken") { Kind = FormFieldKind.Secret, Section = "Account", Hint = "never shown, also not while typing" },
+            new FormField("device", "Device name", "laptop") { Section = "Account", Validate = v => v.Contains(' ') ? "no spaces" : null },
+        ];
+
+        var result = new Label(new StyledText("Nothing submitted yet.", Theme.Current.MutedStyle)) { Wrap = true };
+        void Report(IReadOnlyDictionary<string, string> changes) =>
+            result.Content = new StyledText("Submitted: ", Theme.Current.TextStyle)
+                .Append(string.Join(", ", changes.Select(c => $"{c.Key}={c.Value}")), Theme.Current.AccentStyle);
+
+        var form = new Form(Fields()) { HasFocus = true };
+        form.OnSubmit = changes =>
+        {
+            Report(changes);
+            foreach (var field in form.Fields)
+            {
+                field.Accept();
+            }
+        };
+        form.OnCancel = () =>
+        {
+            form.RevertAll();
+            result.Content = new StyledText("Cancelled: changes discarded.", Theme.Current.MutedStyle);
+        };
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("open", "Open as a dialog", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                FormDialog.Show(app, "sync settings", Fields(), Report,
+                    () => result.Content = new StyledText("Dialog cancelled.", Theme.Current.MutedStyle));
+            }
+        }) { Keys = ["o"] });
+
+        var note = new Label(new StyledText(
+            "↑/↓ move, enter edits in place (choices and flags cycle, as do ←/→ and space), u reverts a field, " +
+            "ctrl+s or a applies the changed values only, esc cancels (twice when there are changes). " +
+            "While editing, the readline keys work and enter refuses invalid values.\n\n" +
+            "Press o for the same fields in a FormDialog.", Theme.Current.TextStyle)) { Wrap = true };
+
+        var right = new Stack(Direction.Vertical)
+            .Add(note, Constraint.Length(12))
+            .Add(result, Constraint.Fill());
+        var body = new Stack(Direction.Horizontal)
+            .Add(new KeyHost(new Panel(form, "settings") { BorderStyle = BorderStyle.Rounded }, keymap), Constraint.Fill(3))
+            .Add(new Label(StyledText.Empty()), Constraint.Length(2))
+            .Add(right, Constraint.Fill(2));
+        return Padded(body);
+    }
+
+    // Previews of both kinds of ConfirmDialog; t and d open them for real.
+    // A TextViewer showing three documents: JSON and XML pretty-printed from one line and colored by the built-in
+    // highlighters, and a plain log long enough to search through. 1/2/3 switch documents; the viewer's own keys
+    // (/ n N w # y Y) work on all of them.
+    private static Widget TextViewerDemo(DemoContext ctx)
+    {
+        const string playlist = "{\"name\":\"Road trip\",\"shuffle\":false,\"rating\":4.5,\"cover\":null," +
+            "\"tracks\":[{\"title\":\"Blue in Green\",\"artist\":\"Miles Davis\",\"seconds\":337}," +
+            "{\"title\":\"Teardrop\",\"artist\":\"Massive Attack\",\"seconds\":330}," +
+            "{\"title\":\"Halcyon\",\"artist\":\"Orbital\",\"seconds\":569}]}";
+        const string library = "<?xml version=\"1.0\" encoding=\"utf-8\"?><library owner=\"sam\"><!-- synced nightly -->" +
+            "<album year=\"1959\" title=\"Kind of Blue\"><track n=\"1\">So What</track><track n=\"3\">Blue in Green</track></album>" +
+            "<album year=\"1998\" title=\"Mezzanine\"><track n=\"4\">Teardrop</track><notes><![CDATA[remastered <2019>]]></notes></album></library>";
+        var log = new System.Text.StringBuilder();
+        string[] events = { "scanned folder", "tagged track", "fetched cover art", "skipped duplicate", "wrote playlist" };
+        for (int i = 0; i < 400; i++)
+        {
+            string level = i % 37 == 0 ? "WARN " : "INFO ";
+            log.Append(FormattableString.Invariant($"{i / 60 + 10:00}:{i % 60:00}:12 {level} {events[i % events.Length]} #{i}"));
+            if (i % 37 == 0)
+            {
+                log.Append("\tslow disk, retrying with a smaller buffer so the scan can finish without running out of memory");
+            }
+
+            log.Append('\n');
+        }
+
+        var viewer = new TextViewer();
+        var panel = new Panel(viewer);
+        void Show(string title, string text)
+        {
+            panel.Title = title;
+            viewer.Text = PrettyPrint.Auto(text);
+            viewer.Highlighter = PrettyPrint.HighlighterFor(text);
+            viewer.ScrollToLine(0);
+        }
+
+        Show("playlist.json", playlist);
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("json", "Show the JSON playlist", () => Show("playlist.json", playlist)) { Keys = ["1"] });
+        keymap.Add(new AppAction("xml", "Show the XML library", () => Show("library.xml", library)) { Keys = ["2"] });
+        keymap.Add(new AppAction("log", "Show the scan log", () => Show("scan.log", log.ToString())) { Keys = ["3"] });
+
+        var note = new Label(KeyHints(("1/2/3", "document"), ("/", "search"), ("n/N", "next/prev"), ("w", "wrap"),
+            ("#", "line numbers"), ("y/Y", "copy")));
+        var body = new Stack(Direction.Vertical)
+            .Add(note, Constraint.Length(2))
+            .Add(new KeyHost(panel, keymap), Constraint.Fill());
+        return Padded(body);
+    }
+
+    private static StyledText KeyHints(params (string Key, string Label)[] hints)
+    {
+        var text = new StyledText();
+        for (int i = 0; i < hints.Length; i++)
+        {
+            text.Append(i == 0 ? hints[i].Key : "  " + hints[i].Key, Theme.Current.AccentStyle)
+                .Append(" " + hints[i].Label, Theme.Current.MutedStyle);
+        }
+
+        return text;
+    }
+
+    // A Switcher holding three named views of a small mail app. 1/2/3 (or :inbox, :notes, :about in a real app)
+    // swap them; the one shown gets the focus, so j/k scroll the inbox or the notes without any routing code.
+    private static Widget SwitcherDemo(DemoContext ctx)
+    {
+        var inbox = new Table<DemoMessage> { ShowHeader = true, Striped = true };
+        inbox.Columns.Add(new TableColumn<DemoMessage>("From", Constraint.Length(14), m => m.From));
+        inbox.Columns.Add(new TableColumn<DemoMessage>("Subject", Constraint.Fill(), m => m.Subject));
+        inbox.Columns.Add(new TableColumn<DemoMessage>("Received", Constraint.Length(10), m => m.Received, Justify.Right));
+        inbox.SetRows([
+            new("Ada", "Lunch on Friday?", "09:12"),
+            new("Grace", "Slides for the talk", "08:47"),
+            new("Linus", "Re: patch v3", "yesterday"),
+            new("Margaret", "Photos from the trip", "Mon"),
+            new("Alan", "Chess this weekend", "Sun"),
+        ]);
+
+        var notes = new TextViewer(string.Join('\n',
+            "Groceries", "  - oranges", "  - coffee beans", "  - bread", "",
+            "Ideas", "  - a tiny pager widget", "  - a calendar view", "  - sort the photo archive by year"));
+        var about = new Label(new StyledText(
+            "Each view is an ordinary widget. The switcher forwards render, input and focus to the one showing and " +
+            "mounts it while it shows, so a view that refreshes in the background stops when it's swapped out.",
+            Theme.Current.TextStyle)) { Wrap = true };
+
+        var bar = new Label(StyledText.Empty());
+        var log = new Label(StyledText.Empty());
+        var switcher = new Switcher()
+            .Add("inbox", inbox)
+            .Add("notes", notes)
+            .Add("about", Padded(about));
+
+        void Update()
+        {
+            var text = new StyledText();
+            int i = 1;
+            foreach (var name in switcher.Names)
+            {
+                bool current = name == switcher.CurrentName;
+                text.Append($" {i++} {name} ", current ? new Style(Theme.Current.SelectionForeground, Theme.Current.Accent).Bold : Theme.Current.MutedStyle);
+            }
+
+            bar.Content = text;
+        }
+
+        switcher.OnSwitch = (from, to) =>
+        {
+            log.Content = new StyledText("switched to ", Theme.Current.MutedStyle).Append(switcher.CurrentName ?? "nothing", Theme.Current.AccentStyle);
+            Update();
+        };
+        Update();
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("inbox", "Show the inbox", () => switcher.Show("inbox")) { Keys = ["1"] });
+        keymap.Add(new AppAction("notes", "Show the notes", () => switcher.Show("notes")) { Keys = ["2"] });
+        keymap.Add(new AppAction("about", "Show about", () => switcher.Show("about")) { Keys = ["3"] });
+
+        var body = new Stack(Direction.Vertical)
+            .Add(new Label(KeyHints(("1/2/3", "switch view"), ("↑/↓", "move in the view"))), Constraint.Length(2))
+            .Add(bar, Constraint.Length(1))
+            .Add(new Panel(new KeyHost(switcher, keymap)), Constraint.Fill())
+            .Add(log, Constraint.Length(1));
+        return Padded(body);
+    }
+
+    // An Activity fed from background threads: each key starts a task on the thread pool that reports progress
+    // and ends in success or failure. The strip on top shows what runs and what just finished; the list below
+    // shows everything. Nothing here posts to the UI thread: the activity requests the repaints itself.
+    private static Widget ActivityDemo(DemoContext ctx)
+    {
+        var activity = new Activity();
+        activity.Start("Export photos").Succeed("312 photos");
+        activity.Start("Rename files").Fail("a file with that name already exists");
+        activity.Start("Back up documents").Report(0.35, "1.2 of 3.4 GB");
+
+        int downloads = 0;
+        void StartDownload()
+        {
+            int n = ++downloads;
+            _ = activity.Run($"Download album {n}", async task =>
+            {
+                for (int i = 1; i <= 20; i++)
+                {
+                    await System.Threading.Tasks.Task.Delay(150).ConfigureAwait(false);
+                    task.Report(i / 20.0, $"track {i} of 20");
+                }
+            });
+        }
+
+        void StartFailing() => _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            using var task = activity.Start("Sync calendar");
+            await System.Threading.Tasks.Task.Delay(1200).ConfigureAwait(false);
+            task.Fail("server unreachable");
+        });
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("download", "Start a download", StartDownload) { Keys = ["d"] });
+        keymap.Add(new AppAction("fail", "Start a task that fails", StartFailing) { Keys = ["f"] });
+        keymap.Add(new AppAction("list", "Open the activity list", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                ActivityList.Show(app, activity);
+            }
+        }) { Keys = ["l"] });
+
+        var list = new ActivityList(activity);
+        var body = new Stack(Direction.Vertical)
+            .Add(new Label(KeyHints(("d", "download"), ("f", "failing sync"), ("l", "list overlay"), ("↑/↓", "move"), ("c", "clear finished"))), Constraint.Length(2))
+            .Add(new ActivityStrip(activity) { IdleText = "nothing running" }, Constraint.Length(2))
+            .Add(new Panel(new KeyHost(list, keymap), "all tasks"), Constraint.Fill());
+        return Padded(body);
+    }
+
+    private static Widget ConfirmDemo(DemoContext ctx)
+    {
+        static ConfirmDialog Trash() => new("Move 3 files to the trash?")
+        {
+            Details = [new StyledText("notes-old.txt, draft.md and draft-2.md can be restored from the trash.", Theme.Current.TextStyle)],
+            Toggles = [new ConfirmToggle('f', "force: also files that are open")],
+        };
+
+        static ConfirmDialog Delete() => new("Delete report.pdf?")
+        {
+            Details = [new StyledText("It is removed from every synced device, not moved to the trash.", Theme.Current.TextStyle)],
+            Warning = "This can't be undone.",
+            Risk = ConfirmRisk.Destructive,
+            ConfirmText = "report.pdf",
+            Toggles = [new ConfirmToggle('f', "force: even if it's open")],
+        };
+
+        var result = new Label(new StyledText("Press t or d.", Theme.Current.MutedStyle));
+        void Report(string what, ConfirmResult r) =>
+            result.Content = r.Confirmed
+                ? new StyledText($"{what}: confirmed", new Style(Theme.Current.Success, Color.Default)).Append(r.IsOn('f') ? " (forced)" : "", Theme.Current.MutedStyle)
+                : new StyledText($"{what}: cancelled", Theme.Current.MutedStyle);
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("trash", "Ask to move to the trash", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                ConfirmDialog.Show(app, Trash(), r => Report("trash", r));
+            }
+        }) { Keys = ["t"] });
+        keymap.Add(new AppAction("delete", "Ask to delete", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                ConfirmDialog.Show(app, Delete(), r => Report("delete", r));
+            }
+        }) { Keys = ["d"] });
+
+        var trash = Trash();
+        var delete = Delete();
+        var note = new Label(new StyledText(
+            "t asks with y/n (f toggles force); d makes you type the file's name (alt+f toggles force). " +
+            "Esc cancels either. Below: what they look like.", Theme.Current.TextStyle)) { Wrap = true };
+        var previews = new Stack(Direction.Horizontal)
+            .Add(trash, Constraint.Length(48))
+            .Add(new Label(StyledText.Empty()), Constraint.Length(2))
+            .Add(delete, Constraint.Length(48))
+            .Add(new Label(StyledText.Empty()), Constraint.Fill());
+        var body = new Stack(Direction.Vertical)
+            .Add(new KeyHost(note, keymap), Constraint.Length(3))
+            .Add(result, Constraint.Length(2))
+            .Add(previews, Constraint.Length(Math.Max(trash.PreferredHeight(48), delete.PreferredHeight(48))))
+            .Add(new Label(StyledText.Empty()), Constraint.Fill());
         return Padded(body);
     }
 

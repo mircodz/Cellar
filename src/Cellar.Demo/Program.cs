@@ -22,7 +22,7 @@ internal static class Program
     {
         if (args.Length > 0 && args[0] == "--selfcheck")
         {
-            SelfCheck();
+            SelfCheck(args.Length > 1 ? args[1] : null);
             return;
         }
 
@@ -30,7 +30,7 @@ internal static class Program
         using var app = new App(terminal);
         using var cts = new CancellationTokenSource();
 
-        var ctx = new DemoContext();
+        var ctx = new DemoContext { App = app };
         var themes = BuiltIn.All;
         int themeIndex = 0;
 
@@ -71,6 +71,8 @@ internal static class Program
         app.Root = new Stack(Direction.Vertical)
             .Add(split, Constraint.Fill())
             .Add(footer, Constraint.Length(1));
+
+        app.OnEvent = e => ctx.Intercept?.Invoke(e) ?? false;
 
         // The shortcuts only get keys the demo doesn't use, so q, t, and d can be typed into a text field
         // and Escape zooms a flamegraph out before it quits.
@@ -150,8 +152,8 @@ internal static class Program
     }
 
     // Renders every demo offscreen (with a few animation ticks) to catch build/render errors
-    // without a live terminal. Run with `dotnet run -- --selfcheck`.
-    private static void SelfCheck()
+    // without a live terminal. Run with `dotnet run -- --selfcheck`; add a demo name to print its last frame.
+    private static void SelfCheck(string? print = null)
     {
         var ctx = new DemoContext();
         var surface = new Surface(100, 30);
@@ -168,6 +170,19 @@ internal static class Program
                 surface.ResetClip();
             }
             Console.WriteLine($"ok  {demo.Name}");
+            if (string.Equals(print, demo.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                for (int y = 0; y < surface.Height; y++)
+                {
+                    var line = new System.Text.StringBuilder();
+                    for (int x = 0; x < surface.Width; x++)
+                    {
+                        line.Append(surface.Get(x, y).Grapheme is { Length: > 0 } g ? g : " ");
+                    }
+
+                    Console.WriteLine("│" + line.ToString().TrimEnd());
+                }
+            }
         }
         Console.WriteLine($"selfcheck passed: {Demos.All.Count} demos rendered.");
     }
@@ -211,8 +226,15 @@ internal sealed record TickMessage;
 /// </summary>
 internal sealed class DemoContext
 {
+    /// <summary>The running app, for demos that open overlays; null in the offscreen self-check.</summary>
+    public App? App { get; init; }
+
     /// <summary>Rises by a small step each tick; demos derive animation from it.</summary>
     public double Phase { get; private set; }
+
+    /// <summary>Sees every event before the page does, like <see cref="App.OnEvent"/>, for a demo with a
+    /// <see cref="CommandLine"/> (an open prompt must get Tab before the gallery's focus switching).</summary>
+    public Func<InputEvent, bool>? Intercept { get; set; }
 
     /// <summary>Raised once per animation tick. Live demos subscribe to update their widgets.</summary>
     public event Action<double>? Tick;
@@ -225,7 +247,11 @@ internal sealed class DemoContext
 
     /// <summary>Clears all Tick subscribers — called when the shown demo changes so a hidden
     /// demo's widgets stop being animated.</summary>
-    public void ResetSubscribers() => Tick = null;
+    public void ResetSubscribers()
+    {
+        Tick = null;
+        Intercept = null;
+    }
 }
 
 /// <summary>One catalog entry: a name, a one-line blurb, and a builder that produces the widget.</summary>

@@ -54,6 +54,7 @@ internal static class Demos
         new("Confirm dialog", "y/n, or type the name; toggles like force", ConfirmDemo),
         new("Text viewer", "pager: / search, n/N, wrap, JSON and XML colors", TextViewerDemo),
         new("Switcher", "one place, several views; focus and lifecycle follow", SwitcherDemo),
+        new("Activity", "background tasks on one line, and in full", ActivityDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -1048,6 +1049,56 @@ internal static class Demos
             .Add(bar, Constraint.Length(1))
             .Add(new Panel(new KeyHost(switcher, keymap)), Constraint.Fill())
             .Add(log, Constraint.Length(1));
+        return Padded(body);
+    }
+
+    // An Activity fed from background threads: each key starts a task on the thread pool that reports progress
+    // and ends in success or failure. The strip on top shows what runs and what just finished; the list below
+    // shows everything. Nothing here posts to the UI thread: the activity requests the repaints itself.
+    private static Widget ActivityDemo(DemoContext ctx)
+    {
+        var activity = new Activity();
+        activity.Start("Export photos").Succeed("312 photos");
+        activity.Start("Rename files").Fail("a file with that name already exists");
+        activity.Start("Back up documents").Report(0.35, "1.2 of 3.4 GB");
+
+        int downloads = 0;
+        void StartDownload()
+        {
+            int n = ++downloads;
+            _ = activity.Run($"Download album {n}", async task =>
+            {
+                for (int i = 1; i <= 20; i++)
+                {
+                    await System.Threading.Tasks.Task.Delay(150).ConfigureAwait(false);
+                    task.Report(i / 20.0, $"track {i} of 20");
+                }
+            });
+        }
+
+        void StartFailing() => _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            using var task = activity.Start("Sync calendar");
+            await System.Threading.Tasks.Task.Delay(1200).ConfigureAwait(false);
+            task.Fail("server unreachable");
+        });
+
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("download", "Start a download", StartDownload) { Keys = ["d"] });
+        keymap.Add(new AppAction("fail", "Start a task that fails", StartFailing) { Keys = ["f"] });
+        keymap.Add(new AppAction("list", "Open the activity list", () =>
+        {
+            if (ctx.App is { } app)
+            {
+                ActivityList.Show(app, activity);
+            }
+        }) { Keys = ["l"] });
+
+        var list = new ActivityList(activity);
+        var body = new Stack(Direction.Vertical)
+            .Add(new Label(KeyHints(("d", "download"), ("f", "failing sync"), ("l", "list overlay"), ("↑/↓", "move"), ("c", "clear finished"))), Constraint.Length(2))
+            .Add(new ActivityStrip(activity) { IdleText = "nothing running" }, Constraint.Length(2))
+            .Add(new Panel(new KeyHost(list, keymap), "all tasks"), Constraint.Fill());
         return Padded(body);
     }
 

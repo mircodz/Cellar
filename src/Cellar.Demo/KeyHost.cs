@@ -28,6 +28,8 @@ internal sealed class KeyHost(Widget child, Keymap keymap, Action? afterKey = nu
 
     public override void Render(Surface surface, Rect area) => child.Render(surface, area);
 
+    protected override void VisitChildren(Action<Widget> visit) => visit(child);
+
     public override bool OnEvent(InputEvent e)
     {
         if (child.OnEvent(e))

@@ -106,6 +106,18 @@ public sealed class App : IDisposable
         _terminal.Write(Terminal.Clipboard.SetClipboardSequence(text));
     }
 
+    /// <summary>Copies <paramref name="text"/> to the system clipboard (OSC 52), as <see cref="CopySelection"/>
+    /// does for the mouse selection. No-op if empty.</summary>
+    public void CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        _terminal.Write(Terminal.Clipboard.SetClipboardSequence(text));
+    }
+
     /// <summary>Invoked for every input event; return true if handled. Any event marks the UI dirty.</summary>
     public Func<InputEvent, bool>? OnEvent { get; set; }
 

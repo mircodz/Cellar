@@ -31,7 +31,7 @@ internal static class Demos
     public static readonly IReadOnlyList<Demo> All =
     [
         new("Table", "rows as objects: styled cells, sort by value, filter", Table),
-        new("Table views", "live refresh by key, query filter, groups, marks", TableViews),
+        new("Table views", "live refresh by key, filter, groups, marks", TableViews),
         new("Tree", "collapsible, lazy, clickable links", Tree),
         new("Tabs", "tabbed container with a lens bar", TabsDemo),
         new("Dashboard", "many widgets composed on one page", Dashboard),
@@ -50,6 +50,7 @@ internal static class Demos
         new("Command line", ":commands with completion, / filter, questions", CommandLineDemo),
         new("Form", "settings to review and change, as a page or a dialog", FormDemo),
         new("Confirm dialog", "y/n, or type the name; toggles like force", ConfirmDemo),
+        new("Text viewer", "pager: / search, n/N, wrap, JSON and XML colors", TextViewerDemo),
         new("Panels & borders", "framed containers, border styles", Panels),
         new("Overlay", "modal dialog over dimmed content", OverlayDemo),
         new("Text & wrap", "styled runs, word wrapping, justify", TextDemo),
@@ -921,6 +922,68 @@ internal static class Demos
     }
 
     // Previews of both kinds of ConfirmDialog; t and d open them for real.
+    // A TextViewer showing three documents: JSON and XML pretty-printed from one line and colored by the built-in
+    // highlighters, and a plain log long enough to search through. 1/2/3 switch documents; the viewer's own keys
+    // (/ n N w # y Y) work on all of them.
+    private static Widget TextViewerDemo(DemoContext ctx)
+    {
+        const string playlist = "{\"name\":\"Road trip\",\"shuffle\":false,\"rating\":4.5,\"cover\":null," +
+            "\"tracks\":[{\"title\":\"Blue in Green\",\"artist\":\"Miles Davis\",\"seconds\":337}," +
+            "{\"title\":\"Teardrop\",\"artist\":\"Massive Attack\",\"seconds\":330}," +
+            "{\"title\":\"Halcyon\",\"artist\":\"Orbital\",\"seconds\":569}]}";
+        const string library = "<?xml version=\"1.0\" encoding=\"utf-8\"?><library owner=\"sam\"><!-- synced nightly -->" +
+            "<album year=\"1959\" title=\"Kind of Blue\"><track n=\"1\">So What</track><track n=\"3\">Blue in Green</track></album>" +
+            "<album year=\"1998\" title=\"Mezzanine\"><track n=\"4\">Teardrop</track><notes><![CDATA[remastered <2019>]]></notes></album></library>";
+        var log = new System.Text.StringBuilder();
+        string[] events = { "scanned folder", "tagged track", "fetched cover art", "skipped duplicate", "wrote playlist" };
+        for (int i = 0; i < 400; i++)
+        {
+            string level = i % 37 == 0 ? "WARN " : "INFO ";
+            log.Append(FormattableString.Invariant($"{i / 60 + 10:00}:{i % 60:00}:12 {level} {events[i % events.Length]} #{i}"));
+            if (i % 37 == 0)
+            {
+                log.Append("\tslow disk, retrying with a smaller buffer so the scan can finish without running out of memory");
+            }
+
+            log.Append('\n');
+        }
+
+        var viewer = new TextViewer();
+        var panel = new Panel(viewer);
+        void Show(string title, string text)
+        {
+            panel.Title = title;
+            viewer.Text = PrettyPrint.Auto(text);
+            viewer.Highlighter = PrettyPrint.HighlighterFor(text);
+            viewer.ScrollToLine(0);
+        }
+
+        Show("playlist.json", playlist);
+        var keymap = new Keymap();
+        keymap.Add(new AppAction("json", "Show the JSON playlist", () => Show("playlist.json", playlist)) { Keys = ["1"] });
+        keymap.Add(new AppAction("xml", "Show the XML library", () => Show("library.xml", library)) { Keys = ["2"] });
+        keymap.Add(new AppAction("log", "Show the scan log", () => Show("scan.log", log.ToString())) { Keys = ["3"] });
+
+        var note = new Label(KeyHints(("1/2/3", "document"), ("/", "search"), ("n/N", "next/prev"), ("w", "wrap"),
+            ("#", "line numbers"), ("y/Y", "copy")));
+        var body = new Stack(Direction.Vertical)
+            .Add(note, Constraint.Length(2))
+            .Add(new KeyHost(panel, keymap), Constraint.Fill());
+        return Padded(body);
+    }
+
+    private static StyledText KeyHints(params (string Key, string Label)[] hints)
+    {
+        var text = new StyledText();
+        for (int i = 0; i < hints.Length; i++)
+        {
+            text.Append(i == 0 ? hints[i].Key : "  " + hints[i].Key, Theme.Current.AccentStyle)
+                .Append(" " + hints[i].Label, Theme.Current.MutedStyle);
+        }
+
+        return text;
+    }
+
     private static Widget ConfirmDemo(DemoContext ctx)
     {
         static ConfirmDialog Trash() => new("Move 3 files to the trash?")

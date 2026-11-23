@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Cellar.Primitives;
 using Cellar.Rendering;
@@ -144,6 +145,38 @@ public class CommandPaletteTests
 
         Assert.NotNull(palette.Selected);
         Assert.StartsWith("Open", palette.Selected!.Title);
+    }
+
+    [Fact]
+    public void EqualScoresKeepTheOrderCommandsWereAddedIn()
+    {
+        var palette = new CommandPalette();
+        var titles = Enumerable.Range(0, 40).Select(i => $"Command {i}").ToList();
+        foreach (var title in titles)
+        {
+            palette.Add(title, () => { });
+        }
+        palette.HasFocus = true;
+
+        var shown = new List<string>();
+        for (int i = 0; i < titles.Count; i++)
+        {
+            shown.Add(palette.Selected!.Title);
+            palette.OnEvent(K(Key.Down));
+        }
+
+        Assert.Equal(titles, shown);
+    }
+
+    [Fact]
+    public void ALongTitleEndsInAnEllipsisBeforeItsSubtitle()
+    {
+        var palette = new CommandPalette().Add("Dismiss the error, clear the marks or the filter, or go back", () => { }, "esc");
+        var surface = new Surface(30, 5);
+
+        palette.Render(surface, new Rect(0, 0, 30, 5));
+
+        Assert.Equal("│ Dismiss the error, c…  esc │", SurfaceText.Row(surface, 3));
     }
 
     [Fact]

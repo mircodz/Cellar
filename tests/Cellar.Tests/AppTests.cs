@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Cellar.Layout;
 using Cellar.Primitives;
 using Cellar.Rendering;
 using Cellar.Terminal;
@@ -41,6 +42,35 @@ public class AppTests
         await app.RunAsync(timeout.Token);
 
         Assert.Equal(3, widget.RenderCount);
+    }
+
+    [Fact]
+    public async Task Running_FocusesTheRoot_SoContainersHandFocusDown()
+    {
+        using var app = new App(new FakeTerminal()) { MouseHoverEnabled = false, FrameInterval = TimeSpan.Zero };
+        var input = new Input();
+        var switcher = new Switcher(input);
+        app.Root = new Stack(Direction.Vertical).Add(new Label("title"), Constraint.Length(1)).Add(switcher, Constraint.Fill());
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        await app.RunAsync(timeout.Token);
+
+        // A Switcher passes focus to what it shows only once it has it; without the app focusing the root, nothing did.
+        Assert.True(switcher.HasFocus);
+        Assert.True(input.HasFocus);
+    }
+
+    [Fact]
+    public async Task Running_LeavesARootThatCantTakeFocusAlone()
+    {
+        using var app = new App(new FakeTerminal()) { MouseHoverEnabled = false, FrameInterval = TimeSpan.Zero };
+        var label = new Label("nothing to focus");
+        app.Root = label;
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        await app.RunAsync(timeout.Token);
+
+        Assert.False(label.HasFocus);
     }
 
     [Fact]

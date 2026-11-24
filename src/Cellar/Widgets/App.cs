@@ -266,6 +266,13 @@ public sealed class App : IDisposable
             readerTask = Task.Run(() => InputPump(cancellationToken), CancellationToken.None);
 
             Root?.Mount(this);
+            // Containers hand focus down (a Stack to its first focusable child, a Switcher to the widget it shows),
+            // but only once they have it themselves; the root gets it here, so keys reach the app's first widget.
+            if (Root is { IsFocusable: true, HasFocus: false } root)
+            {
+                root.HasFocus = true;
+            }
+
             foreach (var overlay in _overlays)
             {
                 MountOverlay(overlay);

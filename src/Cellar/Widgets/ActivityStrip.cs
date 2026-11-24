@@ -182,7 +182,8 @@ public sealed class ActivityStrip : Widget
     // Running tasks first in start order, then finished ones in the order they ended (CopyTo gives start order).
     private static readonly Comparison<ActivitySnapshot> EndOrder = static (a, b) =>
         a.IsRunning != b.IsRunning ? (a.IsRunning ? -1 : 1)
-        : Nullable.Compare(a.Ended, b.Ended) is var c and not 0 ? c : a.Id.CompareTo(b.Id);
+        : Nullable.Compare(a.Ended, b.Ended) is var c and not 0 ? c
+        : a.Ending != b.Ending ? a.Ending.CompareTo(b.Ending) : a.Id.CompareTo(b.Id);
 
     private DateTimeOffset ShownUntil(in ActivitySnapshot task) => task.Ended is { } ended
         ? ended + (task.State == ActivityState.Failed ? ShowFailedFor : ShowFinishedFor)
@@ -511,7 +512,10 @@ public sealed class ActivityList : Widget
         _order.Sort(firstFinished, _order.Count - firstFinished, Comparer<int>.Create(NewestFirst));
     }
 
-    private int NewestFirst(int a, int b) => Nullable.Compare(_tasks[b].Ended, _tasks[a].Ended) is var c and not 0 ? c : b.CompareTo(a);
+    // Ending breaks ties between tasks that ended in the same clock tick: the one that ended last comes first.
+    private int NewestFirst(int a, int b) =>
+        Nullable.Compare(_tasks[b].Ended, _tasks[a].Ended) is var c and not 0 ? c
+        : _tasks[b].Ending != _tasks[a].Ending ? _tasks[b].Ending.CompareTo(_tasks[a].Ending) : b.CompareTo(a);
 
     private void Move(int delta)
     {

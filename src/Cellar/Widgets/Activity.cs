@@ -327,7 +327,7 @@ public sealed class ActivityTask : IDisposable
     /// <summary>Cancels the task if it's still running.</summary>
     public void Dispose() => Cancel();
 
-    internal ActivitySnapshot SnapshotUnlocked() => new(Id, _title, _state, _progress, _message, Started, _ended);
+    internal ActivitySnapshot SnapshotUnlocked() => new(Id, _title, _state, _progress, _message, Started, _ended) { Ending = Ending };
 
     private void End(ActivityState state, string? message)
     {
@@ -377,6 +377,12 @@ public readonly record struct ActivitySnapshot(
     DateTimeOffset Started,
     DateTimeOffset? Ended)
 {
+    /// <summary>
+    /// When it ended relative to the other tasks of its <see cref="Activity"/>: higher ended later, 0 while running.
+    /// Tells apart tasks that ended within the same clock tick.
+    /// </summary>
+    public long Ending { get; init; }
+
     /// <summary>Whether the task is still running.</summary>
     public bool IsRunning => State == ActivityState.Running;
 

@@ -46,7 +46,7 @@ public sealed class CommandPalette : Widget
     // Per visible row, its screen y and the filtered-command index, for mouse hit-testing.
     private readonly List<(int y, int index)> _rowHits = new();
 
-    private readonly record struct Scored(Command Command, int Score);
+    private readonly record struct Scored(Command Command, int Score, int Index);
 
     /// <summary>Invoked after a command's action runs (e.g. to dismiss the hosting overlay).</summary>
     public Action? OnAfterRun { get; set; }
@@ -89,10 +89,11 @@ public sealed class CommandPalette : Widget
         {
             if (FuzzyMatcher.Score(q, cmd.Title, out int score))
             {
-                results.Add(new Scored(cmd, score));
+                results.Add(new Scored(cmd, score, results.Count));
             }
         }
-        results.Sort((a, b) => b.Score.CompareTo(a.Score));
+        // List.Sort isn't stable: equal scores (every command, before anything is typed) keep the order they were added in.
+        results.Sort((a, b) => a.Score != b.Score ? b.Score.CompareTo(a.Score) : a.Index.CompareTo(b.Index));
         _filtered = results;
         _selected = 0;
         _scroll = 0;
@@ -176,15 +177,21 @@ public sealed class CommandPalette : Widget
                 bold: true);
 
             int x = area.X + 1;
+            int width = area.Width - 2;
             surface.SetClip(new Rect(x, y, area.Width - 1, 1));
-            TextRenderer.DrawLine(surface, x, y, area.Width - 1, title, Justify.Left);
 
+            // The subtitle keeps up to half the row; a title that doesn't fit before it ends in an ellipsis.
+            int titleWidth = width;
             if (!string.IsNullOrEmpty(scored.Command.Subtitle))
             {
                 var subStyle = selected ? rowStyle : new Style(theme.Muted, bg);
                 var sub = new StyledText(scored.Command.Subtitle, subStyle);
-                TextRenderer.DrawLine(surface, x, y, area.Width - 2, sub, Justify.Right);
+                int subWidth = Math.Min(sub.Width, width / 2);
+                TextRenderer.DrawLine(surface, x + width - subWidth, y, subWidth, sub, Justify.Right);
+                titleWidth = Math.Max(0, width - subWidth - 2);
             }
+
+            TextRenderer.DrawLine(surface, x, y, titleWidth, title, Justify.Left);
             surface.ResetClip();
         }
     }

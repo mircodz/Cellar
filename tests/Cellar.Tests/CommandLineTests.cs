@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -180,6 +181,30 @@ public class CommandLineTests
         // Typing ends the cycle and completes from the new text.
         Type(line, "x");
         Assert.Empty(line.Candidates);
+    }
+
+    [Fact]
+    public void Tab_OnALoneCandidate_CompletesAgainFromIt()
+    {
+        var tree = new Dictionary<string, string[]>
+        {
+            ["~/p"] = ["~/pkg/"],
+            ["~/pkg/"] = ["~/pkg/app.sfpkg", "~/pkg/more/"],
+        };
+        var line = new CommandLine();
+        line.Open(new CommandMode(":") { Completion = CompletionSource.From(t => (tree.TryGetValue(t, out var c) ? c : []).Select(x => new CompletionItem(x))) });
+        Type(line, "~/p");
+
+        // One candidate: accepted, and the next tab looks inside it, like a shell.
+        line.Intercept(K(Key.Tab));
+        Assert.Equal("~/pkg/", line.Input.Text);
+        Assert.Equal(["~/pkg/app.sfpkg", "~/pkg/more/"], Texts(line.Candidates));
+
+        // Several: tab cycles through them as before.
+        line.Intercept(K(Key.Tab));
+        Assert.Equal("~/pkg/app.sfpkg", line.Input.Text);
+        line.Intercept(K(Key.Tab));
+        Assert.Equal("~/pkg/more/", line.Input.Text);
     }
 
     [Fact]

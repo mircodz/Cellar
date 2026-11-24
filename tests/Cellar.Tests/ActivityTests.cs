@@ -258,7 +258,8 @@ public class ActivityTests
     [Fact]
     public void Strip_ShowsTheLatestOutcomeFirst_WhateverTheStartOrder()
     {
-        var activity = new Activity();
+        // A clock that doesn't move: both end at the same instant, so only the order they ended in can tell them apart.
+        var activity = new Activity(new ManualClock());
         var alpha = activity.Start("Alpha");
         var beta = activity.Start("Beta");
         beta.Succeed();

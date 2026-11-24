@@ -368,11 +368,21 @@ public sealed class CommandLine : Widget
         mode.OnSubmit?.Invoke(text);
     }
 
-    // Tab accepts the best candidate; tab again moves to the next one (shift+tab back), wrapping.
+    // Tab accepts the best candidate; tab again moves to the next one (shift+tab back), wrapping. A lone candidate is
+    // accepted and completion starts again from it, as in a shell: tab on "~/pk" gives "~/pkg/", tab again lists
+    // what's in it.
     private void Cycle(int step)
     {
         if (_candidates.Count == 0)
         {
+            return;
+        }
+
+        if (_candidates.Count == 1 && !_cycling)
+        {
+            Input.Text = _candidates[0].Text;
+            Refresh();
+            Mode?.OnChange?.Invoke(Input.Text);
             return;
         }
 
